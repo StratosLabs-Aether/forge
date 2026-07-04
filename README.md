@@ -1,0 +1,144 @@
+# ⚒ Aether Forge IDE
+
+**Aether Forge** is the official native desktop IDE for the [Aether](https://github.com/StratosLabs-Aether/source) programming language. Built with **Tauri 2.0 + Rust**, featuring a custom dark theme and the **Scrible AI agent** — powered by Ollama.
+
+> **Architecture**: Tauri 2.0 (Rust backend) + Custom JS editor + Scrible AI (Ollama)
+
+## Quick Start
+
+### Prerequisites
+- [Rust](https://rustup.rs) (for building)
+- [Ollama](https://ollama.com) (for Scrible AI — auto-installed on first launch)
+- Linux with GTK/WebKit2GTK dev libraries
+
+### Build & Run
+
+```bash
+git clone https://github.com/StratosLabs-Aether/forge
+cd forge
+cargo tauri dev       # development mode
+cargo tauri build     # production build (AppImage/deb/rpm)
+```
+
+### Prerequisites (Linux)
+
+```bash
+# Debian/Ubuntu
+sudo apt install libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev
+
+# Fedora
+sudo dnf install webkit2gtk4.1-devel gtk3-devel libappindicator-gtk3-devel
+
+# Arch
+sudo pacman -S webkit2gtk-6.0 gtk3 libappindicator-gtk3
+```
+
+## Features
+
+- **Beautiful Dark Theme** — Custom Catppuccin-inspired palette, sleek and modern
+- **Monaco Editor** — Same editor that powers VS Code, with full Aether syntax highlighting
+- **Scrible AI Agent** — StarCoder2-3B fine-tuned for Aether, with:
+  - **Inline code completions** (Fill-In-the-Middle)
+  - **Chat interface** for code generation, explanation, and fixes
+  - **Preinstalled pretrained model** + any Ollama model support
+- **File Explorer** — Tree view with directory expansion
+- **Tab System** — Multi-file editing with dirty-state indicators
+- **Integrated Terminal** — Run, debug, and test Aether code directly
+- **Status Center** — Real-time output, model status, and cursor position
+
+## Quick Start
+
+### Prerequisites
+
+- **Node.js** >= 18
+- **npm** >= 9
+- **Rust** >= 1.75 (for the Tauri backend)
+- **Node.js** >= 18 (for Tree-sitter CLI only)
+- **Aether CLI** installed and in PATH
+- **Ollama** (for Scrible AI — optional but recommended)
+
+### Install & Run
+
+```bash
+cd Aether-Forge-IDE
+
+# Install Tauri CLI
+cargo install tauri-cli --version "^2"
+
+# Run in development mode
+cargo tauri dev
+```
+
+### Build Standalone Packages
+
+```bash
+cargo tauri build           # Native binary for current OS
+cargo tauri build --target x86_64-unknown-linux-gnu
+```
+
+## Architecture
+
+```
+Aether-Forge-IDE/
+├── src-tauri/
+│   ├── Cargo.toml              # Tauri 2.0 + Rust dependencies
+│   ├── tauri.conf.json         # Window config, CSP, bundling
+│   └── src/main.rs             # Rust backend (files, LSP, Scrible AI)
+│   ├── preload.js            # Secure context bridge
+│   ├── aether-runtime/       # Bundled Aether interpreter (Python)
+│   └── renderer/
+│       ├── index.html        # IDE shell layout
+│       ├── css/
+│       │   └── forge-dark.css    # Complete dark theme
+│       ├── js/
+│       │   ├── forge-core.js     # State management, tabs, IPC
+│       │   ├── forge-editor.js   # Monaco editor + Aether language support
+│       │   ├── forge-files.js    # File explorer panel
+│       │   ├── forge-scrible.js  # Scrible AI chat panel
+│       │   ├── forge-status.js   # Status center + terminal output
+│       │   └── forge-app.js      # Bootstrap
+│       └── icons/
+│           └── forge.png
+```
+
+## Scrible AI Agent
+
+Scrible is powered by **StarCoder2-3B**, heavily modified and trained for coding in Aether:
+
+| Model | Size | Description |
+|---|---|---|
+| `aether-scrible:3b-q4` | ~2 GB | **Recommended** — Trained on Aether code (preinstalled) |
+| `starcoder2:3b` | ~2 GB | Base StarCoder2 model |
+| Any Ollama model | varies | Custom model support |
+
+### Training Scrible
+
+The Scrible agent is trained using the pipeline in `../scripts/train-starcoder/`:
+
+```bash
+cd ../scripts/train-starcoder
+python prepare_data.py    # Collects all .ath files
+python finetune.py        # Fine-tunes StarCoder2-3B with QLoRA
+python convert_to_ollama.py  # Converts to Ollama format
+ollama pull aether-scrible:3b-q4
+```
+
+## Keyboard Shortcuts
+
+| Shortcut | Action |
+|---|---|
+| `Ctrl+N` | New file |
+| `Ctrl+O` | Open file |
+| `Ctrl+S` | Save |
+| `Ctrl+K` | Open folder |
+| `F5` | Run current file |
+| `Ctrl+F5` | Debug current file |
+| `Shift+F5` | Stop execution |
+| `Ctrl+T` | Run tests |
+| `Ctrl+B` | Toggle Files panel |
+| `Ctrl+J` | Toggle Scrible panel |
+| `Ctrl+`` | Toggle Status Center |
+
+## License
+
+MIT — Stratos Labs © 2026
