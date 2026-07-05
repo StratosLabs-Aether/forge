@@ -24,6 +24,7 @@ use std::path::PathBuf;
 use std::process::{Child, Command, Stdio};
 use std::sync::Mutex;
 use tauri::State;
+use tauri::Emitter;
 
 // ═══════════════════════════════════════════════════════════════════
 // State
