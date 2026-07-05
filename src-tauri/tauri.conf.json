@@ -47,7 +47,6 @@
     "fs": {
       "requireLiteralLeadingDot": false
     },
-    "dialog": {},
     "updater": {
       "endpoints": [
         "https://github.com/StratosLabs-Aether/forge/releases/latest/download/latest.json"
