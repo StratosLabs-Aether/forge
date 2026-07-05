@@ -42,7 +42,15 @@ fi
 echo ""
 bold "⚒  Aether Forge IDE — Installer"
 echo "  Source: $SCRIPT_DIR"
+echo "  Install: $([ "$(id -u)" -eq 0 ] && echo 'system-wide (/usr/local)' || echo 'user-local (~/.local)')"
 echo ""
+
+# Detect system-wide vs user-local
+if [[ "$(id -u)" -eq 0 ]]; then
+  PREFIX="/usr/local"
+else
+  PREFIX="${HOME}/.local"
+fi
 
 # ── Detect OS & install deps ──────────────────────────────
 HAS_SUDO=0
@@ -86,10 +94,15 @@ if ! command -v pkg-config >/dev/null 2>&1; then
 fi
 
 # ── Helper functions ──────────────────────────────────────
-INSTALL_DIR="${HOME}/.local/bin"
+INSTALL_DIR="${PREFIX}/bin"
 
 copy_desktop_entry() {
-  local DESKTOP_DIR="${HOME}/.local/share/applications"
+  local DESKTOP_DIR
+  if [[ "$(id -u)" -eq 0 ]]; then
+    DESKTOP_DIR="/usr/local/share/applications"
+  else
+    DESKTOP_DIR="${HOME}/.local/share/applications"
+  fi
   mkdir -p "$DESKTOP_DIR"
   cat > "${DESKTOP_DIR}/com.stratoslabs.AetherForge.desktop" << DESKTOPEOF
 [Desktop Entry]
