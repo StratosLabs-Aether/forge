@@ -108,7 +108,7 @@ copy_desktop_entry() {
 [Desktop Entry]
 Name=Aether Forge
 Comment=Native IDE for the Aether programming language
-Exec=${INSTALL_DIR}/aether-forge
+Exec=env WEBKIT_DISABLE_COMPOSITING_MODE=1 GDK_BACKEND=x11 ${INSTALL_DIR}/aether-forge
 Icon=com.stratoslabs.AetherForge
 Terminal=false
 Type=Application
