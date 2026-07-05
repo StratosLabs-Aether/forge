@@ -178,14 +178,102 @@ fn list_dir(path: String) -> FileResult {
 
 // ── Aether Runtime ─────────────────────────────────────────────────
 
+/// Find the aether binary — checks PATH, ~/.local/bin, common install locations
+fn find_aether() -> Option<String> {
+    // Check PATH first
+    if which::which("aether").is_ok() {
+        return Some("aether".to_string());
+    }
+    // Check common install locations
+    let candidates = [
+        format!("{}/.local/bin/aether", std::env::var("HOME").unwrap_or_default()),
+        "/usr/local/bin/aether".to_string(),
+        "/usr/bin/aether".to_string(),
+    ];
+    for path in &candidates {
+        if std::path::Path::new(path).exists() {
+            return Some(path.clone());
+        }
+    }
+    None
+}
+
+/// Find ollama binary
+fn find_ollama() -> Option<String> {
+    if which::which("ollama").is_ok() {
+        return Some("ollama".to_string());
+    }
+    let candidates = [
+        "/usr/local/bin/ollama".to_string(),
+        "/usr/bin/ollama".to_string(),
+    ];
+    for path in &candidates {
+        if std::path::Path::new(path).exists() {
+            return Some(path.clone());
+        }
+    }
+    None
+}
+
+#[derive(Debug, Serialize)]
+struct SetupStatus {
+    aether_installed: bool,
+    aether_path: Option<String>,
+    ollama_installed: bool,
+    ollama_running: bool,
+    model_available: bool,
+    model_name: String,
+    all_ready: bool,
+}
+
+#[tauri::command]
+fn check_setup(model_name: String) -> SetupStatus {
+    let aether = find_aether();
+    let ollama = find_ollama();
+    let ollama_running = std::process::Command::new("ollama")
+        .arg("list")
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false);
+    let model_available = if ollama_running {
+        std::process::Command::new("ollama")
+            .args(["list"])
+            .output()
+            .map(|o| {
+                String::from_utf8_lossy(&o.stdout)
+                    .contains(&model_name)
+            })
+            .unwrap_or(false)
+    } else {
+        false
+    };
+
+    SetupStatus {
+        aether_installed: aether.is_some(),
+        aether_path: aether,
+        ollama_installed: ollama.is_some(),
+        ollama_running,
+        model_available,
+        model_name,
+        all_ready: aether.is_some() && ollama_running && model_available,
+    }
+}
+
 #[tauri::command]
 fn run_aether(path: String, debug: bool, state: State<ForgeState>, app: tauri::AppHandle) -> FileResult {
     if let Ok(mut proc) = state.aether_process.lock() {
         if let Some(ref mut child) = *proc { let _ = child.kill(); }
     }
 
-    // Spawn aether with piped stdout/stderr for real-time streaming
-    let mut cmd = std::process::Command::new("aether");
+    let aether_bin = match find_aether() {
+        Some(p) => p,
+        None => return FileResult {
+            success: false, content: None, entries: None,
+            error: Some("Aether is not installed.\n\nInstall it:\n  curl -fsSL https://raw.githubusercontent.com/StratosLabs-Aether/source/main/aether-native/install.sh | bash\n\nOr:\n  git clone https://github.com/StratosLabs-Aether/source\n  cd source && bash aether-native/install.sh".to_string()),
+        },
+    };
+
+    let mut cmd = std::process::Command::new(&aether_bin);
     if debug { cmd.arg("--debug"); }
     cmd.arg(&path);
     cmd.stdout(std::process::Stdio::piped());
@@ -648,6 +736,7 @@ fn main() {
             start_lsp,
             stop_lsp,
             open_folder_dialog,
+            check_setup,
             check_forge_update,
             setup_scrible,
         ])

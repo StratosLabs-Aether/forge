@@ -599,6 +599,21 @@ document.addEventListener('DOMContentLoaded',()=>{
   document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key==='b'){e.preventDefault();document.getElementById('sidebar-left').classList.toggle('collapsed');}});
   document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key==='j'){e.preventDefault();Forge.toggleScrible();}});
   document.getElementById('act-settings')?.addEventListener('click',()=>alert('Aether Forge v2.0.0\nStratos Labs\n\nTauri 2.0 + Rust + Scrible AI\n\nhttps://github.com/StratosLabs-Aether/forge'));
+  // Run setup check on startup
+  setTimeout(async function() {
+    var setup = await invoke('check_setup', {modelName: Forge.config.model});
+    if (!setup.all_ready) {
+      var msgs = [];
+      if (!setup.aether_installed) msgs.push('❌ Aether not installed. Run: bash aether-native/install.sh from https://github.com/StratosLabs-Aether/source');
+      if (!setup.ollama_installed) msgs.push('❌ Ollama not installed. Run: curl -fsSL https://ollama.com/install.sh | sh');
+      else if (!setup.ollama_running) msgs.push('⚠️  Ollama installed but not running. Start it: ollama serve');
+      if (!setup.model_available) msgs.push('⚠️  Model ' + setup.modelName + ' not pulled. Run: ollama pull ' + setup.modelName);
+      if (msgs.length > 0) {
+        logOutput('══ Setup Check ══\n' + msgs.join('\n') + '\n');
+        switchPanel('output');
+      }
+    }
+  }, 1000);
   console.log('Aether Forge v2.0.0 ready.');
 
   // Listen for real-time terminal output from Rust backend
