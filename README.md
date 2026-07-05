@@ -31,8 +31,8 @@ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 # 3. Clone and build
 git clone https://github.com/StratosLabs-Aether/forge
 cd forge
-cargo install tauri-cli --version "^2"
-cargo tauri build    # → produces AppImage, .deb, .rpm in src-tauri/target/release/bundle/
+cargo build --release --manifest-path src-tauri/Cargo.toml
+# → binary at src-tauri/target/release/aether-forge
 ```
 
 ### 🧪 Development mode
