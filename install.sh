@@ -162,7 +162,6 @@ else
 fi
 
 # ── Install ───────────────────────────────────────────────
-INSTALL_DIR="${HOME}/.local/bin"
 BIN_SRC="src-tauri/target/release/aether-forge"
 BUNDLE_DIR="src-tauri/target/release/bundle"
 
