@@ -2,8 +2,15 @@
 
 const Forge = {
   tabs: [], activeTabId: null, folderPath: null,
-  // aether-scrible:phi3-v2 — 569 examples, 5 epochs, FIM-trained Phi-3
-  config: { model:'aether-scrible:phi3-v2', endpoint:'http://localhost:11434', temperature:0.2, maxTokens:512 },
+  // scrible-completor: FIM-trained Phi-3 for inline code completion (569 ex, 5 epochs)
+  // scrible-chatcoder: chat + multi-line generation (train with larger base)
+  config: {
+    completorModel: 'scrible-completor',
+    chatModel: 'scrible-chatcoder',
+    endpoint:'http://localhost:11434',
+    temperature:0.2,
+    maxTokens:512
+  },
   isWaiting: false,
 };
 
@@ -416,7 +423,7 @@ async function scribleSend(text) {
   const ctxBlock = fileContent ? '\n\nThe user has this file open in the editor:\n```aether\n'+fileContent+'\n```' : '';
   try {
     const r = await invoke('scrible_chat', {query:{
-      endpoint:Forge.config.endpoint, model:Forge.config.model,
+      endpoint:Forge.config.endpoint, model:Forge.config.chatModel,
       messages:[
         {role:'system', content:SCRIBLE_SYSTEM_PROMPT},
         {role:'user', content:text+fileInfo+projCtx+ctxBlock}
@@ -588,26 +595,30 @@ document.addEventListener('DOMContentLoaded',()=>{
   document.getElementById('btn-clear-chat')?.addEventListener('click',clearScribleChat);
   ta?.addEventListener('input',updateSmartPrompts);
   ta?.addEventListener('mouseup',updateSmartPrompts);
-  document.getElementById('scrible-model')?.addEventListener('change',function(){Forge.config.model=this.value;document.getElementById('status-model').textContent=this.value;try{localStorage.setItem('forge-config',JSON.stringify(Forge.config));}catch(e){}});
+  document.getElementById('scrible-model')?.addEventListener('change',function(){
+    Forge.config.chatModel=this.value;
+    document.getElementById('status-model').textContent=this.value;
+    try{localStorage.setItem('forge-config',JSON.stringify(Forge.config));}catch(e){}
+  });
   updateSmartPrompts();
 
   // Config
-  try{const s=JSON.parse(localStorage.getItem('forge-config')||'{}');Object.assign(Forge.config,s);const sm=document.getElementById('scrible-model');if(sm)sm.value=Forge.config.model;document.getElementById('status-model').textContent=Forge.config.model;}catch(e){}
+  try{var s=JSON.parse(localStorage.getItem('forge-config')||'{}');Object.assign(Forge.config,s);var sm=document.getElementById('scrible-model');if(sm)sm.value=Forge.config.chatModel;document.getElementById('status-model').textContent=Forge.config.chatModel;}catch(e){}
 
   // Keyboard
   document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key==='s'){e.preventDefault();Forge.save();}});
   document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key==='b'){e.preventDefault();document.getElementById('sidebar-left').classList.toggle('collapsed');}});
   document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key==='j'){e.preventDefault();Forge.toggleScrible();}});
-  document.getElementById('act-settings')?.addEventListener('click',()=>alert('Aether Forge v2.0.0\nStratos Labs\n\nTauri 2.0 + Rust + Scrible AI\n\nhttps://github.com/StratosLabs-Aether/forge'));
+  document.getElementById('act-settings')?.addEventListener('click',()=>alert('Aether Forge v2.0.0\nStratos Labs\n\nDual-model AI:\n  ✏️ scrible-completor — FIM code completion\n  💬 scrible-chatcoder — Chat + code generation\n\nhttps://github.com/StratosLabs-Aether/forge'));
   // Run setup check on startup
   setTimeout(async function() {
-    var setup = await invoke('check_setup', {modelName: Forge.config.model});
+    var setup = await invoke('check_setup', {modelName: Forge.config.completorModel});
     if (!setup.all_ready) {
       var msgs = [];
       if (!setup.aether_installed) msgs.push('❌ Aether not installed. Run: bash aether-native/install.sh from https://github.com/StratosLabs-Aether/source');
       if (!setup.ollama_installed) msgs.push('❌ Ollama not installed. Run: curl -fsSL https://ollama.com/install.sh | sh');
       else if (!setup.ollama_running) msgs.push('⚠️  Ollama installed but not running. Start it: ollama serve');
-      if (!setup.model_available) msgs.push('⚠️  Model ' + setup.modelName + ' not pulled. Run: ollama pull ' + setup.modelName);
+      if (!setup.model_available) msgs.push('⚠️  Model ' + Forge.config.completorModel + ' not pulled. Run: ollama pull ' + Forge.config.completorModel);
       if (msgs.length > 0) {
         logOutput('══ Setup Check ══\n' + msgs.join('\n') + '\n');
         switchPanel('output');

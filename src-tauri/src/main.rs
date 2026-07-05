@@ -703,16 +703,16 @@ fn main() {
                 match status {
                     Ok(_) => {
                         println!("[Forge] Ollama service started");
-                        // Pull aether-scrible:phi3-v2 — FIM-trained Phi-3 (569 examples, 5 epochs)
+                        // Pull scrible-completor (FIM code completion model)
                         std::thread::sleep(std::time::Duration::from_secs(2));
                         let pull = std::process::Command::new("ollama")
-                            .args(["pull", "aether-scrible:phi3-v2"])
+                            .args(["pull", "scrible-completor"])
                             .stdout(std::process::Stdio::null())
                             .stderr(std::process::Stdio::null())
                             .status();
                         match pull {
-                            Ok(s) if s.success() => println!("[Forge] Scrible Phi-3 model ready"),
-                            _ => eprintln!("[Forge] Could not pull model. Run: ollama pull aether-scrible:phi3-v2"),
+                            Ok(s) if s.success() => println!("[Forge] scrible-completor ready"),
+                            _ => eprintln!("[Forge] Could not pull scrible-completor"),
                         }
                     }
                     Err(e) => eprintln!("[Forge] Could not start Ollama: {}. Is it installed?", e),
