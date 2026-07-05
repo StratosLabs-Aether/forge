@@ -412,7 +412,19 @@ async function scribleSend(text) {
         {role:'user', content:text+fileInfo+projCtx+ctxBlock}
       ], temperature:Forge.config.temperature, max_tokens:Forge.config.maxTokens
     }});
-    const response = (r&&r.success&&r.response)?r.response:(r&&r.error)?'**Error:** '+esc(r.error):'_(No response. Is Ollama running?)_';
+    var response;
+    if (r && r.success && r.response) {
+      response = r.response;
+    } else if (r && r.error) {
+      var errMsg = r.error;
+      if (errMsg.indexOf('Ollama unreachable') >= 0 || errMsg.indexOf('Connection refused') >= 0) {
+        response = '**Scrible is not running.**\n\nOllama is not installed or not started on this PC.\n\n```bash\ncurl -fsSL https://ollama.com/install.sh | sh\nollama pull Scrible\n```\n\nThen restart Aether Forge.';
+      } else {
+        response = '**Error:** ' + esc(errMsg);
+      }
+    } else {
+      response = '_(No response. Is Ollama running? Run: ollama pull Scrible)_';
+    }
     addBubble('bot', response);
     // Check for file-write directives and auto-apply
     autoApplyWrites(response);

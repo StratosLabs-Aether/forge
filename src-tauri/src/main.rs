@@ -545,7 +545,7 @@ fn main() {
                 match status {
                     Ok(_) => {
                         println!("[Forge] Ollama service started");
-                        // Pull Scrible model if not already present
+                        // Pull Scrible model
                         std::thread::sleep(std::time::Duration::from_secs(2));
                         let pull = std::process::Command::new("ollama")
                             .args(["pull", "Scrible"])
@@ -554,7 +554,7 @@ fn main() {
                             .status();
                         match pull {
                             Ok(s) if s.success() => println!("[Forge] Scrible model ready"),
-                            _ => eprintln!("[Forge] Could not pull Scrible model. Run: ollama pull Scrible"),
+                            _ => eprintln!("[Forge] Could not pull Scrible. Run: ollama pull Scrible"),
                         }
                     }
                     Err(e) => eprintln!("[Forge] Could not start Ollama: {}. Is it installed?", e),
