@@ -2,7 +2,9 @@
 
 const Forge = {
   tabs: [], activeTabId: null, folderPath: null,
-  config: { model:'Scrible', endpoint:'http://localhost:11434', temperature:0.2, maxTokens:512 },
+  // Default model: phi3 is small (2.2GB), fast, and follows the Aether system prompt well.
+  // For better results: ollama pull llama3.1 and switch in Settings.
+  config: { model:'phi3:3.8b', endpoint:'http://localhost:11434', temperature:0.2, maxTokens:512 },
   isWaiting: false,
 };
 
