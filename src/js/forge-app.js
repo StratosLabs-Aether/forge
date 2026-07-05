@@ -2,8 +2,8 @@
 
 const Forge = {
   tabs: [], activeTabId: null, folderPath: null,
-  // Default: aether-scrible:3b-q4 — starcoder2 fine-tuned on 569 Aether examples
-  config: { model:'aether-scrible:3b-q4', endpoint:'http://localhost:11434', temperature:0.2, maxTokens:512 },
+  // aether-scrible:phi3-v2 — 569 examples, 5 epochs, FIM-trained Phi-3
+  config: { model:'aether-scrible:phi3-v2', endpoint:'http://localhost:11434', temperature:0.2, maxTokens:512 },
   isWaiting: false,
 };
 
