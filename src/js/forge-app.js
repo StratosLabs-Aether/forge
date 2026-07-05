@@ -69,15 +69,12 @@ Forge.runFile = async function(debug) {
     await invoke('write_file',{path:tab.path,content:tab.content});
   }
   this.renderTabs(); this._updateStatus();
-  clearOutput(); logOutput('Running: '+tab.name+'\n');
-  switchPanel('output');
-  var result = await invoke('run_aether',{path:tab.path,debug:!!debug});
-  if (result && result.content) {
-    logOutput(result.content);
-  }
-  if (result && result.error) {
-    logOutput('\n⚠️  ' + result.error);
-  }
+  // Clear terminal and switch to it
+  var termLines = document.getElementById('terminal-lines');
+  if (termLines) termLines.innerHTML = '';
+  switchPanel('terminal');
+  logTerminal('⚡ Running: '+tab.name+'\n');
+  await invoke('run_aether',{path:tab.path,debug:!!debug});
 };
 
 Forge.toggleScrible = function() {
@@ -539,7 +536,9 @@ function showTyping(s){const e=document.getElementById('scrible-typing');if(e)e.
 
 // ── Output ────────────────────────────────────────────────
 function logOutput(text){const t=document.getElementById('output-lines');if(!t)return;t.querySelector('.output-placeholder')?.remove();const s=document.createElement('span');s.textContent=text;t.appendChild(s);t.scrollTop=t.scrollHeight;}
+function logTerminal(text){const t=document.getElementById('terminal-lines');if(!t)return;t.querySelector('.output-placeholder')?.remove();const s=document.createElement('span');s.textContent=text;t.appendChild(s);t.scrollTop=t.scrollHeight;}
 function clearOutput(){const t=document.getElementById('output-lines');if(t)t.innerHTML='';}
+function clearTerminal(){const t=document.getElementById('terminal-lines');if(t)t.innerHTML='';}
 function switchPanel(name){document.querySelectorAll('#panel-tabs .panel-tab').forEach(b=>b.classList.remove('active'));document.querySelectorAll('.panel-content').forEach(p=>p.classList.remove('active'));const tab=document.querySelector('#panel-tabs .panel-tab[data-panel="'+name+'"]'),content=document.getElementById('panel-'+name);if(tab)tab.classList.add('active');if(content)content.classList.add('active');}
 
 // ── Init ──────────────────────────────────────────────────
@@ -596,6 +595,14 @@ document.addEventListener('DOMContentLoaded',()=>{
   document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key==='j'){e.preventDefault();Forge.toggleScrible();}});
   document.getElementById('act-settings')?.addEventListener('click',()=>alert('Aether Forge v2.0.0\nStratos Labs\n\nTauri 2.0 + Rust + Scrible AI\n\nhttps://github.com/StratosLabs-Aether/forge'));
   console.log('Aether Forge v2.0.0 ready.');
+
+  // Listen for real-time terminal output from Rust backend
+  if (window.__TAURI__) {
+    window.__TAURI__.event.listen('terminal-line', function(event) {
+      logTerminal(event.payload + '\n');
+    });
+  }
+
   // Check for updates (silent on startup)
   setTimeout(function() { checkForUpdates(true); }, 3000);
   // Ensure right sidebar visible
