@@ -69,9 +69,15 @@ Forge.runFile = async function(debug) {
     await invoke('write_file',{path:tab.path,content:tab.content});
   }
   this.renderTabs(); this._updateStatus();
-  clearOutput(); logOutput('Launched in terminal: '+tab.name+'\n');
+  clearOutput(); logOutput('Running: '+tab.name+'\n');
   switchPanel('output');
-  await invoke('run_aether',{path:tab.path,debug:!!debug});
+  var result = await invoke('run_aether',{path:tab.path,debug:!!debug});
+  if (result && result.content) {
+    logOutput(result.content);
+  }
+  if (result && result.error) {
+    logOutput('\n⚠️  ' + result.error);
+  }
 };
 
 Forge.toggleScrible = function() {

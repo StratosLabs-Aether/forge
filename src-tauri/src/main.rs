@@ -182,6 +182,44 @@ fn run_aether(path: String, debug: bool, state: State<ForgeState>) -> FileResult
     if let Ok(mut proc) = state.aether_process.lock() {
         if let Some(ref mut child) = *proc { let _ = child.kill(); }
     }
+
+    // Run aether directly and capture output (no external terminal needed)
+    let mut cmd = std::process::Command::new("aether");
+    if debug { cmd.arg("--debug"); }
+    cmd.arg(&path);
+
+    match cmd.output() {
+        Ok(output) => {
+            let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+            let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+            let combined = if stderr.is_empty() {
+                stdout
+            } else if stdout.is_empty() {
+                stderr
+            } else {
+                format!("{}\n{}", stdout, stderr)
+            };
+            FileResult {
+                success: output.status.success(),
+                content: Some(if combined.is_empty() { "(no output)".to_string() } else { combined }),
+                entries: None,
+                error: if output.status.success() { None } else { Some(format!("exit code: {:?}", output.status.code())) },
+            }
+        }
+        Err(e) => FileResult {
+            success: false,
+            content: None,
+            entries: None,
+            error: Some(format!("Could not run aether: {}. Is it installed? Run: bash aether-native/install.sh", e)),
+        },
+    }
+}
+
+#[tauri::command]
+fn run_aether_terminal(path: String, debug: bool, state: State<ForgeState>) -> FileResult {
+    if let Ok(mut proc) = state.aether_process.lock() {
+        if let Some(ref mut child) = *proc { let _ = child.kill(); }
+    }
     // Detect available terminal emulator
     let terminals = [
         ("ghostty",       &["-e"][..]),
@@ -571,6 +609,7 @@ fn main() {
             write_file,
             list_dir,
             run_aether,
+            run_aether_terminal,
             stop_execution,
             scrible_complete,
             scrible_chat,
