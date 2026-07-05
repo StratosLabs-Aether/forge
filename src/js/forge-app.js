@@ -501,7 +501,7 @@ async function scribleSend(text) {
     } else if (r && r.error) {
       var errMsg = r.error;
       if (errMsg.indexOf('Ollama unreachable') >= 0 || errMsg.indexOf('Connection refused') >= 0) {
-        response = '**Scrible is not running.**\n\nOllama is not installed or not started on this PC.\n\n```bash\ncurl -fsSL https://ollama.com/install.sh | sh\nollama pull Scrible\n```\n\nThen restart Aether Forge.';
+        response = '**Scrible AI is not available on this PC.**\n\nTo enable AI features:\n\n```bash\n# 1. Install Ollama\ncurl -fsSL https://ollama.com/install.sh | sh\n\n# 2. Pull the models\nollama pull scrible-completor\nollama pull scrible-chatcoder\n```\n\nThen restart Aether Forge.\n\nThe editor, file manager, and run/debug work without AI.';
       } else {
         response = '**Error:** ' + esc(errMsg);
       }
@@ -676,21 +676,27 @@ document.addEventListener('DOMContentLoaded',()=>{
   document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key==='b'){e.preventDefault();document.getElementById('sidebar-left').classList.toggle('collapsed');}});
   document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key==='j'){e.preventDefault();Forge.toggleScrible();}});
   document.getElementById('act-settings')?.addEventListener('click',()=>alert('Aether Forge v2.0.0\nStratos Labs\n\nDual-model AI:\n  ✏️ scrible-completor — FIM code completion\n  💬 scrible-chatcoder — Chat + code generation\n\nhttps://github.com/StratosLabs-Aether/forge'));
-  // Run setup check on startup
+  // Run setup check on startup — non-blocking, just shows status
   setTimeout(async function() {
     var setup = await invoke('check_setup', {modelName: Forge.config.completorModel});
-    if (!setup.all_ready) {
-      var msgs = [];
-      if (!setup.aether_installed) msgs.push('❌ Aether not installed. Run: bash aether-native/install.sh from https://github.com/StratosLabs-Aether/source');
-      if (!setup.ollama_installed) msgs.push('❌ Ollama not installed. Run: curl -fsSL https://ollama.com/install.sh | sh');
-      else if (!setup.ollama_running) msgs.push('⚠️  Ollama installed but not running. Start it: ollama serve');
-      if (!setup.model_available) msgs.push('⚠️  Model ' + Forge.config.completorModel + ' not pulled. Run: ollama pull ' + Forge.config.completorModel);
-      if (msgs.length > 0) {
-        logOutput('══ Setup Check ══\n' + msgs.join('\n') + '\n');
-        switchPanel('output');
-      }
+    var msgs = [];
+    if (setup.aether_installed) {
+      msgs.push('✅ Aether: ' + (setup.aether_path||'found'));
+    } else {
+      msgs.push('❌ Aether not installed. Get it: https://github.com/StratosLabs-Aether/source');
     }
-  }, 1000);
+    if (!setup.ollama_installed) {
+      msgs.push('⚠️  Ollama not installed — AI features disabled. Install: curl -fsSL https://ollama.com/install.sh | sh');
+    } else if (!setup.ollama_running) {
+      msgs.push('⚠️  Ollama not running — start with: ollama serve');
+    } else if (!setup.model_available) {
+      msgs.push('⚠️  Model not pulled. Run: ollama pull ' + Forge.config.completorModel);
+    } else {
+      msgs.push('✅ AI ready: ' + Forge.config.completorModel);
+    }
+    msgs.push('── Forge ready ──');
+    logOutput(msgs.join('\n'));
+  }, 1500);
   console.log('Aether Forge v2.0.0 ready.');
 
   // Listen for real-time terminal output from Rust backend
