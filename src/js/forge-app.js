@@ -62,6 +62,72 @@ Forge.save = async function() {
   return tab;
 };
 
+// ── Inline Autocomplete (scrible-completor FIM) ──────────
+Forge.autocompleteTimer = null;
+Forge.completionGhost = '';
+
+Forge.triggerAutocomplete = function() {
+  clearTimeout(this.autocompleteTimer);
+  this.autocompleteTimer = setTimeout(async function() {
+    var ta = document.getElementById('editor-textarea');
+    if (!ta || ta.style.display === 'none') return;
+    var code = ta.value;
+    if (!code || code.length < 3) return;
+    var cursorPos = ta.selectionStart;
+    // Get code up to cursor as the FIM prefix
+    var prefix = code.substring(0, cursorPos);
+    if (!prefix.trim()) return;
+
+    try {
+      var r = await invoke('scrible_complete', {query:{
+        endpoint: Forge.config.endpoint,
+        model: Forge.config.completorModel,
+        prompt: prefix,
+        temperature: 0.1,
+        max_tokens: 64
+      }});
+      if (r && r.success && r.response) {
+        Forge.completionGhost = r.response.trim();
+        Forge.showGhost();
+      }
+    } catch(e) {}
+  }, 400);
+};
+
+Forge.showGhost = function() {
+  var ta = document.getElementById('editor-textarea');
+  var overlay = document.getElementById('ghost-overlay');
+  if (!ta || !Forge.completionGhost) {
+    if (overlay) overlay.textContent = '';
+    return;
+  }
+  if (!overlay) {
+    overlay = document.createElement('div');
+    overlay.id = 'ghost-overlay';
+    overlay.style.cssText = 'position:absolute;pointer-events:none;color:#555;font:inherit;white-space:pre-wrap;overflow:hidden;z-index:0';
+    ta.parentNode.style.position = 'relative';
+    ta.parentNode.insertBefore(overlay, ta.nextSibling);
+  }
+  // Show ghost text after cursor
+  var before = ta.value.substring(0, ta.selectionStart);
+  overlay.textContent = before + Forge.completionGhost;
+  overlay.style.cssText += ';top:0;left:0;right:0;bottom:0;padding:inherit';
+};
+
+Forge.acceptCompletion = function() {
+  if (!this.completionGhost) return false;
+  var ta = document.getElementById('editor-textarea');
+  if (!ta) return false;
+  var cursorPos = ta.selectionStart;
+  ta.value = ta.value.substring(0, cursorPos) + this.completionGhost + ta.value.substring(cursorPos);
+  ta.selectionStart = ta.selectionEnd = cursorPos + this.completionGhost.length;
+  this.completionGhost = '';
+  this.showGhost();
+  var tab = this.tabs.find(t=>t.id===this.activeTabId);
+  if (tab) { tab.content = ta.value; tab.isDirty = true; this.renderTabs(); }
+  return true;
+};
+
 // ── Run file ──────────────────────────────────────────────
 Forge.runFile = async function(debug) {
   let tab = this.tabs.find(t=>t.id===this.activeTabId);
@@ -579,8 +645,8 @@ document.addEventListener('DOMContentLoaded',()=>{
 
   // Editor
   const ta=document.getElementById('editor-textarea');
-  ta?.addEventListener('input',()=>{const tab=Forge.tabs.find(t=>t.id===Forge.activeTabId);if(tab){tab.isDirty=true;tab.content=ta.value;Forge.renderTabs();Forge._updateStatus();}});
-  ta?.addEventListener('keydown',e=>{if(e.key==='Tab'){e.preventDefault();const s=ta.selectionStart;ta.value=ta.value.slice(0,s)+'    '+ta.value.slice(ta.selectionEnd);ta.selectionStart=ta.selectionEnd=s+4;}});
+  ta?.addEventListener('input',()=>{const tab=Forge.tabs.find(t=>t.id===Forge.activeTabId);if(tab){tab.isDirty=true;tab.content=ta.value;Forge.renderTabs();Forge._updateStatus();} Forge.triggerAutocomplete();});
+  ta?.addEventListener('keydown',e=>{if(e.key==='Tab'){e.preventDefault();if(!Forge.acceptCompletion()){const s=ta.selectionStart;ta.value=ta.value.slice(0,s)+'    '+ta.value.slice(ta.selectionEnd);ta.selectionStart=ta.selectionEnd=s+4;}}});
   const uc=()=>{const p=document.getElementById('status-cursor');if(p&&ta){const lines=ta.value.substr(0,ta.selectionStart).split('\n');p.textContent='Ln '+lines.length+', Col '+(lines[lines.length-1].length+1);}};
   ta?.addEventListener('click',uc); ta?.addEventListener('keyup',uc);
 
