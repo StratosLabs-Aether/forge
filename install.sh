@@ -27,13 +27,13 @@ echo ""
 if command -v apt >/dev/null 2>&1; then
   echo "→ Detected Debian/Ubuntu — installing dependencies..."
   sudo apt update -qq
-  sudo apt install -y libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev
+  sudo apt install -y pkg-config libglib2.0-dev libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev
 elif command -v dnf >/dev/null 2>&1; then
   echo "→ Detected Fedora/RHEL — installing dependencies..."
-  sudo dnf install -y webkit2gtk4.1-devel gtk3-devel libappindicator-gtk3-devel
+  sudo dnf install -y pkg-config glib2-devel webkit2gtk4.1-devel gtk3-devel libappindicator-gtk3-devel
 elif command -v pacman >/dev/null 2>&1; then
   echo "→ Detected Arch — installing dependencies..."
-  sudo pacman -S --noconfirm webkit2gtk-6.0 gtk3 libappindicator-gtk3
+  sudo pacman -S --noconfirm pkg-config glib2 webkit2gtk-6.0 gtk3 libappindicator-gtk3
 else
   echo "⚠️  Could not detect package manager. Install these manually:"
   echo "   libwebkit2gtk-4.1-dev, libgtk-3-dev, libappindicator"

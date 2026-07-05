@@ -19,11 +19,11 @@ Once CI builds are published, these will work:
 ```bash
 # 1. Install system dependencies
 #    Debian/Ubuntu:
-sudo apt install libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev
+sudo apt install pkg-config libglib2.0-dev libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev
 #    Fedora:
-sudo dnf install webkit2gtk4.1-devel gtk3-devel libappindicator-gtk3-devel
+sudo dnf install pkg-config glib2-devel webkit2gtk4.1-devel gtk3-devel libappindicator-gtk3-devel
 #    Arch:
-sudo pacman -S webkit2gtk-6.0 gtk3 libappindicator-gtk3
+sudo pacman -S pkg-config glib2 webkit2gtk-6.0 gtk3 libappindicator-gtk3
 
 # 2. Install Rust
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
