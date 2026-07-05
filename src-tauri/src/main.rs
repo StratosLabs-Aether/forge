@@ -615,16 +615,16 @@ fn main() {
                 match status {
                     Ok(_) => {
                         println!("[Forge] Ollama service started");
-                        // Pull phi3 (small, fast, works well with system prompt)
+                        // Pull aether-scrible:3b-q4 (starcoder2 fine-tuned on Aether)
                         std::thread::sleep(std::time::Duration::from_secs(2));
                         let pull = std::process::Command::new("ollama")
-                            .args(["pull", "phi3:3.8b"])
+                            .args(["pull", "aether-scrible:3b-q4"])
                             .stdout(std::process::Stdio::null())
                             .stderr(std::process::Stdio::null())
                             .status();
                         match pull {
-                            Ok(s) if s.success() => println!("[Forge] phi3 model ready"),
-                            _ => eprintln!("[Forge] Could not pull phi3. Run: ollama pull phi3:3.8b"),
+                            Ok(s) if s.success() => println!("[Forge] Scrible model ready"),
+                            _ => eprintln!("[Forge] Could not pull model. Run: ollama pull aether-scrible:3b-q4"),
                         }
                     }
                     Err(e) => eprintln!("[Forge] Could not start Ollama: {}. Is it installed?", e),

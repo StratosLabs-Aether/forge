@@ -2,9 +2,8 @@
 
 const Forge = {
   tabs: [], activeTabId: null, folderPath: null,
-  // Default model: phi3 is small (2.2GB), fast, and follows the Aether system prompt well.
-  // For better results: ollama pull llama3.1 and switch in Settings.
-  config: { model:'phi3:3.8b', endpoint:'http://localhost:11434', temperature:0.2, maxTokens:512 },
+  // Default: aether-scrible:3b-q4 — starcoder2 fine-tuned on 569 Aether examples
+  config: { model:'aether-scrible:3b-q4', endpoint:'http://localhost:11434', temperature:0.2, maxTokens:512 },
   isWaiting: false,
 };
 
@@ -74,7 +73,13 @@ Forge.runFile = async function(debug) {
   if (termLines) termLines.innerHTML = '';
   switchPanel('terminal');
   logTerminal('⚡ Running: '+tab.name+'\n');
-  await invoke('run_aether',{path:tab.path,debug:!!debug});
+  var result = await invoke('run_aether',{path:tab.path,debug:!!debug});
+  if (result && result.error) {
+    logTerminal('\n❌ ' + result.error + '\n');
+  }
+  if (result && result.content && result.content.indexOf('Running') < 0) {
+    logTerminal(result.content);
+  }
 };
 
 Forge.toggleScrible = function() {
