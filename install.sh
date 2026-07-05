@@ -52,7 +52,7 @@ fi
 
 DEPS_LINE=""
 if command -v apt >/dev/null 2>&1; then
-  DEPS_LINE="pkg-config libglib2.0-dev libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev"
+  DEPS_LINE="pkg-config libglib2.0-dev libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev libfuse2"
   if [[ "$HAS_SUDO" -eq 1 ]]; then
     echo "→ Detected Debian/Ubuntu — installing dependencies..."
     sudo apt update -qq
@@ -136,13 +136,26 @@ fi
 
 # ── Build ─────────────────────────────────────────────────
 echo "→ Building Aether Forge (this takes a few minutes)..."
-cargo tauri build 2>&1 | tail -5
+if cargo tauri build 2>&1 | tail -10; then
+  green "✓ Build succeeded"
+else
+  warn "⚠️  AppImage bundling failed (missing libfuse2?). Binary may still exist."
+fi
 
 # ── Install ───────────────────────────────────────────────
 BUNDLE_DIR="src-tauri/target/release/bundle"
 INSTALL_DIR="${HOME}/.local/bin"
 
-if compgen -G "${BUNDLE_DIR}/appimage/"*.AppImage >/dev/null 2>&1; then
+# Always try the binary first — it's the most reliable
+BIN_SRC="src-tauri/target/release/aether-forge"
+if [[ -f "$BIN_SRC" ]]; then
+  mkdir -p "$INSTALL_DIR"
+  cp "$BIN_SRC" "$INSTALL_DIR/aether-forge"
+  chmod +x "$INSTALL_DIR/aether-forge"
+  green "✓ Installed binary to ${INSTALL_DIR}/aether-forge"
+
+# Fall back to AppImage if binary not found
+elif compgen -G "${BUNDLE_DIR}/appimage/"*.AppImage >/dev/null 2>&1; then
   mkdir -p "$INSTALL_DIR"
   cp "${BUNDLE_DIR}/appimage/"*.AppImage "${INSTALL_DIR}/aether-forge.AppImage"
   chmod +x "${INSTALL_DIR}/aether-forge.AppImage"
