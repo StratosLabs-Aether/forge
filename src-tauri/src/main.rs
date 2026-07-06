@@ -23,15 +23,25 @@ use std::fs;
 use std::path::PathBuf;
 use std::process::{Child, Command, Stdio};
 use std::sync::Mutex;
+use std::sync::Arc;
 use tauri::State;
 
 // ═══════════════════════════════════════════════════════════════════
 // State
 // ═══════════════════════════════════════════════════════════════════
 
+struct TerminalState {
+    output: Vec<u8>,
+    stdin: Option<std::process::ChildStdin>,
+    child: Option<Child>,
+    done: bool,
+    exit_code: Option<i32>,
+}
+
 struct ForgeState {
     aether_process: Mutex<Option<Child>>,
     lsp_process: Mutex<Option<Child>>,
+    terminal: Arc<Mutex<TerminalState>>,
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -277,73 +287,145 @@ fn run_aether(path: String, debug: bool, state: State<ForgeState>) -> FileResult
     let mut cmd = std::process::Command::new(&aether_bin);
     if debug { cmd.arg("--debug"); }
     cmd.arg(&path);
+    cmd.stdout(std::process::Stdio::piped());
+    cmd.stderr(std::process::Stdio::piped());
+    cmd.stdin(std::process::Stdio::piped());
 
-    match cmd.output() {
-        Ok(output) => {
-            let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-            let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-            let combined = format!("{}{}", stdout, if stderr.is_empty() { String::new() } else { format!("\n{}", stderr) });
-            let status = output.status;
-            FileResult {
-                success: status.success(),
-                content: Some(if combined.trim().is_empty() { "(no output)".to_string() } else { combined }),
-                entries: None,
-                error: if status.success() { None } else { Some(format!("exit code: {}", status.code().unwrap_or(1))) },
-            }
-        }
-        Err(e) => FileResult {
+    let mut child = match cmd.spawn() {
+        Ok(c) => c,
+        Err(e) => return FileResult {
             success: false, content: None, entries: None,
-            error: Some(format!("Could not run aether: {}. Is it installed?", e)),
+            error: Some(format!("Could not run aether: {}. Install it?", e)),
         },
+    };
+
+    let stdout = child.stdout.take();
+    let stderr = child.stderr.take();
+    let stdin = child.stdin.take();
+
+    // Store process handle for stop button
+    if let Ok(mut proc) = state.aether_process.lock() {
+        *proc = Some(child);
+    }
+
+    // Reset terminal state
+    let term = state.terminal.clone();
+    {
+        let mut t = term.lock().unwrap();
+        t.output.clear();
+        t.done = false;
+        t.exit_code = None;
+        t.stdin = stdin;
+    }
+
+    // Spawn reader threads
+    use std::io::Read;
+    if let Some(mut out) = stdout {
+        let term = term.clone();
+        std::thread::spawn(move || {
+            let mut buf = [0u8; 4096];
+            loop {
+                match out.read(&mut buf) {
+                    Ok(0) => break,
+                    Ok(n) => {
+                        let mut t = term.lock().unwrap();
+                        t.output.extend_from_slice(&buf[..n]);
+                    }
+                    Err(_) => break,
+                }
+            }
+        });
+    }
+    if let Some(mut err) = stderr {
+        let term = term.clone();
+        std::thread::spawn(move || {
+            let mut buf = [0u8; 4096];
+            loop {
+                match err.read(&mut buf) {
+                    Ok(0) => break,
+                    Ok(n) => {
+                        let mut t = term.lock().unwrap();
+                        t.output.extend_from_slice(&buf[..n]);
+                    }
+                    Err(_) => break,
+                }
+            }
+        });
+    }
+
+    // Wait for process in background
+    if let Ok(mut proc) = state.aether_process.lock() {
+        if let Some(ref mut child) = *proc {
+            let term = term.clone();
+            // Can't move child out of mutex, so we track via state
+            std::thread::spawn(move || {
+                // The child is in the state mutex — we wait via the stored handle
+                // For now, just mark done after a delay (the stop button handles kill)
+            });
+        }
+    }
+
+    FileResult {
+        success: true,
+        content: Some("started".to_string()),
+        entries: None,
+        error: None,
     }
 }
 
 #[tauri::command]
-fn run_aether_terminal(path: String, debug: bool, state: State<ForgeState>) -> FileResult {
-    if let Ok(mut proc) = state.aether_process.lock() {
-        if let Some(ref mut child) = *proc { let _ = child.kill(); }
-    }
-    // Detect available terminal emulator
-    let terminals = [
-        ("ghostty",       &["-e"][..]),
-        ("kitty",         &["--"][..]),
-        ("alacritty",     &["-e"][..]),
-        ("konsole",       &["-e"][..]),
-        ("xfce4-terminal",&["-e"][..]),
-        ("gnome-terminal",&["--"][..]),
-        ("xterm",         &["-e"][..]),
-        ("foot",          &["--"][..]),
-        ("lxterminal",    &["-e"][..]),
-    ];
-    let term = std::env::var("TERMINAL").ok()
-        .or_else(|| terminals.iter().find(|(name,_)| which::which(name).is_ok()).map(|(n,_)| n.to_string()))
-        .unwrap_or_else(|| "xterm".into());
-
-    let (cmd_name, extra_args) = terminals.iter()
-        .find(|(name,_)| name == &term.as_str())
-        .map(|(_,args)| (term.as_str(), *args))
-        .unwrap_or_else(|| ("xterm", &["-e"][..]));
-
-    // Wrap in sh -c so &&, echo, read work with every terminal emulator
-    let shell_cmd = format!(
-        "aether {} && echo && echo '── Press Enter to close ──' && read",
-        if debug { format!("--debug \"{}\"", path) } else { format!("\"{}\"", path) }
-    );
-
-    let mut cmd = std::process::Command::new(cmd_name);
-    cmd.args(extra_args).arg("sh").arg("-c").arg(&shell_cmd);
-    let status = cmd.spawn();
-
-    match status {
-        Ok(child) => {
-            if let Ok(mut proc) = state.aether_process.lock() { *proc = Some(child); }
-            FileResult { success: true, content: Some(format!("Running in {}...", cmd_name).into()), entries: None, error: None }
+fn terminal_read(state: State<ForgeState>) -> FileResult {
+    let mut term = state.terminal.lock().unwrap();
+    let text = String::from_utf8_lossy(&term.output).to_string();
+    let exit = term.exit_code;
+    // Check if process is done
+    if !term.done {
+        if let Ok(mut proc) = state.aether_process.lock() {
+            if let Some(ref mut child) = *proc {
+                match child.try_wait() {
+                    Ok(Some(status)) => {
+                        term.done = true;
+                        term.exit_code = status.code();
+                    }
+                    Ok(None) => {} // still running
+                    Err(_) => { term.done = true; }
+                }
+            } else {
+                term.done = true;
+            }
         }
-        Err(e) => FileResult {
-            success: false, content: None, entries: None,
-            error: Some(format!("Could not open terminal: {}. Install xterm or set TERMINAL env var.", e)),
-        },
     }
+    let done = term.done;
+    let exit_code = term.exit_code;
+    drop(term);
+    FileResult {
+        success: true,
+        content: Some(text),
+        entries: None,
+        error: if done { exit_code.map(|c| format!("exit: {}", c)) } else { None },
+    }
+}
+
+#[tauri::command]
+fn terminal_write(text: String, state: State<ForgeState>) -> FileResult {
+    let mut term = state.terminal.lock().unwrap();
+    if let Some(ref mut stdin) = term.stdin {
+        use std::io::Write;
+        let line = format!("{}\n", text);
+        match stdin.write_all(line.as_bytes()) {
+            Ok(_) => FileResult { success: true, content: None, entries: None, error: None },
+            Err(e) => FileResult { success: false, content: None, entries: None, error: Some(e.to_string()) },
+        }
+    } else {
+        FileResult { success: false, content: None, entries: None, error: Some("No running process".to_string()) }
+    }
+}
+
+#[tauri::command]
+fn terminal_clear(state: State<ForgeState>) -> FileResult {
+    let mut term = state.terminal.lock().unwrap();
+    term.output.clear();
+    FileResult { success: true, content: None, entries: None, error: None }
 }
 
 #[tauri::command]
@@ -691,12 +773,22 @@ fn main() {
         .manage(ForgeState {
             aether_process: Mutex::new(None),
             lsp_process: Mutex::new(None),
+            terminal: Arc::new(Mutex::new(TerminalState {
+                output: Vec::new(),
+                stdin: None,
+                child: None,
+                done: true,
+                exit_code: None,
+            })),
         })
         .invoke_handler(tauri::generate_handler![
             read_file,
             write_file,
             list_dir,
             run_aether,
+            terminal_read,
+            terminal_write,
+            terminal_clear,
             stop_execution,
             scrible_complete,
             scrible_chat,

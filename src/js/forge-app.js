@@ -147,12 +147,54 @@ Forge.runFile = async function(debug) {
   switchPanel('terminal');
   logTerminal('⚡ Running: '+tab.name+'\n');
   var result = await invoke('run_aether',{path:tab.path,debug:!!debug});
-  if (result && result.content) {
-    logTerminal(result.content);
-  }
   if (result && result.error) {
-    logTerminal('\n❌ ' + result.error + '\n');
+    logTerminal('❌ ' + result.error + '\n');
+    return;
   }
+  // Start polling for output
+  Forge._pollTerminal();
+};
+
+Forge._pollTimer = null;
+Forge._lastOutput = '';
+
+Forge._pollTerminal = function() {
+  clearInterval(this._pollTimer);
+  this._pollTimer = setInterval(async function() {
+    var r = await invoke('terminal_read', {});
+    if (!r || !r.success) return;
+    var text = r.content || '';
+    // Only show new content
+    if (text !== Forge._lastOutput) {
+      var newText = text.substring(Forge._lastOutput.length);
+      Forge._lastOutput = text;
+      if (newText) {
+        var termLines = document.getElementById('terminal-lines');
+        if (termLines) {
+          termLines.querySelector('.output-placeholder')?.remove();
+          var s = document.createElement('span');
+          s.textContent = newText;
+          termLines.appendChild(s);
+          termLines.scrollTop = termLines.scrollHeight;
+        }
+      }
+    }
+    // Check if process ended
+    if (r.error) {
+      clearInterval(Forge._pollTimer);
+      Forge._pollTimer = null;
+      logTerminal('\n── Process ended (' + r.error + ') ──\n');
+    }
+  }, 200);
+};
+
+Forge.sendTerminalInput = function() {
+  var input = document.getElementById('terminal-input');
+  if (!input) return;
+  var text = input.value;
+  input.value = '';
+  logTerminal(text + '\n');
+  invoke('terminal_write', {text: text});
 };
 
 Forge.toggleScrible = function() {
@@ -671,7 +713,11 @@ document.addEventListener('DOMContentLoaded',()=>{
   // Config
   try{var s=JSON.parse(localStorage.getItem('forge-config')||'{}');Object.assign(Forge.config,s);var sm=document.getElementById('scrible-model');if(sm)sm.value=Forge.config.chatModel;document.getElementById('status-model').textContent=Forge.config.chatModel;}catch(e){}
 
-  // Keyboard
+  // Terminal input
+  var ti = document.getElementById('terminal-input');
+  ti?.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') { e.preventDefault(); Forge.sendTerminalInput(); }
+  });
   document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key==='s'){e.preventDefault();Forge.save();}});
   document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key==='b'){e.preventDefault();document.getElementById('sidebar-left').classList.toggle('collapsed');}});
   document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key==='j'){e.preventDefault();Forge.toggleScrible();}});
