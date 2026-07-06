@@ -447,6 +447,31 @@ fn terminal_clear(state: State<ForgeState>) -> FileResult {
 }
 
 #[tauri::command]
+fn run_shell(command: String) -> FileResult {
+    let output = std::process::Command::new("sh")
+        .arg("-c")
+        .arg(&command)
+        .output();
+    match output {
+        Ok(out) => {
+            let stdout = String::from_utf8_lossy(&out.stdout).to_string();
+            let stderr = String::from_utf8_lossy(&out.stderr).to_string();
+            let combined = if stderr.is_empty() { stdout } else { format!("{}{}", stdout, stderr) };
+            FileResult {
+                success: out.status.success(),
+                content: Some(if combined.trim().is_empty() { "(no output)".to_string() } else { combined }),
+                entries: None,
+                error: if out.status.success() { None } else { Some(format!("exit: {}", out.status.code().unwrap_or(1))) },
+            }
+        }
+        Err(e) => FileResult {
+            success: false, content: None, entries: None,
+            error: Some(format!("{}", e)),
+        },
+    }
+}
+
+#[tauri::command]
 fn stop_execution(state: State<ForgeState>) -> FileResult {
     if let Ok(mut proc) = state.aether_process.lock() {
         if let Some(ref mut child) = *proc {
@@ -807,6 +832,7 @@ fn main() {
             terminal_read,
             terminal_write,
             terminal_clear,
+            run_shell,
             stop_execution,
             scrible_complete,
             scrible_chat,

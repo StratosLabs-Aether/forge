@@ -188,13 +188,23 @@ Forge._pollTerminal = function() {
   }, 200);
 };
 
-Forge.sendTerminalInput = function() {
+Forge.sendTerminalInput = async function() {
   var input = document.getElementById('terminal-input');
   if (!input) return;
   var text = input.value;
   input.value = '';
-  logTerminal(text + '\n');
-  invoke('terminal_write', {text: text});
+  logTerminal('$ ' + text + '\n');
+
+  // If aether process is running, send to stdin
+  if (Forge._pollTimer) {
+    invoke('terminal_write', {text: text});
+    return;
+  }
+
+  // Otherwise, run as shell command
+  var r = await invoke('run_shell', {command: text});
+  if (r && r.content) logTerminal(r.content + '\n');
+  if (r && r.error) logTerminal('❌ ' + r.error + '\n');
 };
 
 Forge.toggleScrible = function() {
