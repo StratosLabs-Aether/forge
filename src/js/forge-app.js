@@ -193,21 +193,20 @@ Forge.sendTerminalInput = async function() {
   if (!input) return;
   var text = input.value;
   input.value = '';
-  logTerminal('$ ' + text + '\n');
 
-  // If aether process is running, send to stdin
+  // If aether/shell process is running, send silently to stdin (passwords!)
   if (Forge._pollTimer) {
     invoke('terminal_write', {text: text});
     return;
   }
 
-  // Run as shell command (non-blocking, poll for output)
+  // No process running — show command in terminal and execute
+  logTerminal('$ ' + text + '\n');
   var r = await invoke('run_shell', {command: text});
   if (r && r.error) {
     logTerminal('❌ ' + r.error + '\n');
     return;
   }
-  // Start polling for output
   Forge._pollTerminal();
 };
 

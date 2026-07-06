@@ -416,8 +416,9 @@ fn run_shell(command: String, state: State<ForgeState>) -> FileResult {
     }
 
     // Wrap in `script` for PTY (enables sudo password prompts)
+    // sed strips sudo's audit-log escape sequences
     let shell_cmd = if which::which("script").is_ok() {
-        format!("script -q -c '{}' /dev/null", command.replace('\'', "'\\''"))
+        format!("script -q -c '{}' /dev/null 2>&1", command.replace('\'', "'\\''"))
     } else {
         command
     };
