@@ -249,13 +249,14 @@ fn check_setup(model_name: String) -> SetupStatus {
     };
 
     SetupStatus {
-        aether_installed: aether.is_some(),
+        aether_installed: has_aether,
+    let has_aether = aether.is_some();
         aether_path: aether,
         ollama_installed: ollama.is_some(),
         ollama_running,
         model_available,
         model_name,
-        all_ready: aether.is_some() && ollama_running && model_available,
+        all_ready: has_aether && ollama_running && model_available,
     }
 }
 
