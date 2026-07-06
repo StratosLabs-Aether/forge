@@ -1,6 +1,6 @@
 [package]
 name = "aether-forge"
-version = "2.0.0"
+version = "2.1.0"
 edition = "2021"
 description = "Aether Forge IDE — Tauri-native, powered by Rust + Scrible AI"
 

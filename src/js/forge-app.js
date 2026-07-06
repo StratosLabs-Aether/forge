@@ -417,7 +417,7 @@ async function loadDir(dirPath, parentEl) {
 }
 
 // ── Update Checker ────────────────────────────────────────
-Forge.CURRENT_VERSION = '2.0.0';
+Forge.CURRENT_VERSION = '2.1.0';
 
 async function checkForUpdates(silent) {
   try {
@@ -731,7 +731,7 @@ document.addEventListener('DOMContentLoaded',()=>{
   document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key==='s'){e.preventDefault();Forge.save();}});
   document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key==='b'){e.preventDefault();document.getElementById('sidebar-left').classList.toggle('collapsed');}});
   document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key==='j'){e.preventDefault();Forge.toggleScrible();}});
-  document.getElementById('act-settings')?.addEventListener('click',()=>alert('Aether Forge v2.0.0\nStratos Labs\n\nDual-model AI:\n  ✏️ scrible-completor — FIM code completion\n  💬 scrible-chatcoder — Chat + code generation\n\nhttps://github.com/StratosLabs-Aether/forge'));
+  document.getElementById('act-settings')?.addEventListener('click',()=>alert('Aether Forge v2.1.0\nStratos Labs\n\nDual-model AI:\n  ✏️ scrible-completor — FIM code completion\n  💬 scrible-chatcoder — Chat + code generation\n\nhttps://github.com/StratosLabs-Aether/forge'));
   // Run setup check on startup — non-blocking, just shows status
   setTimeout(async function() {
     var setup = await invoke('check_setup', {modelName: Forge.config.completorModel});
