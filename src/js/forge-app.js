@@ -201,10 +201,14 @@ Forge.sendTerminalInput = async function() {
     return;
   }
 
-  // Otherwise, run as shell command (synchronous via script PTY)
+  // Run as shell command (non-blocking, poll for output)
   var r = await invoke('run_shell', {command: text});
-  if (r && r.content) logTerminal(r.content);
-  if (r && r.error) logTerminal('\n❌ ' + r.error + '\n');
+  if (r && r.error) {
+    logTerminal('❌ ' + r.error + '\n');
+    return;
+  }
+  // Start polling for output
+  Forge._pollTerminal();
 };
 
 Forge.toggleScrible = function() {

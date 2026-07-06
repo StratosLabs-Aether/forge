@@ -405,15 +405,8 @@ fn run_shell(command: String, state: State<ForgeState>) -> FileResult {
         t.output.clear(); t.done = false; t.exit_code = None;
     }
 
-    // Use script for PTY (sudo/passwords work), fallback to direct sh
-    let shell_cmd = if which::which("script").is_ok() {
-        format!("script -q -c '{}' /dev/null", command.replace('\'', "'\\''"))
-    } else {
-        command
-    };
-
     let mut cmd = std::process::Command::new("sh");
-    cmd.arg("-c").arg(&shell_cmd);
+    cmd.arg("-c").arg(&command);
     cmd.stdout(std::process::Stdio::piped());
     cmd.stderr(std::process::Stdio::piped());
 
@@ -422,21 +415,49 @@ fn run_shell(command: String, state: State<ForgeState>) -> FileResult {
         Err(e) => return FileResult { success: false, content: None, entries: None, error: Some(format!("{}", e)) },
     };
 
-    // Wait for completion and capture output
-    match child.wait_with_output() {
-        Ok(out) => {
-            let stdout = String::from_utf8_lossy(&out.stdout).to_string();
-            let stderr = String::from_utf8_lossy(&out.stderr).to_string();
-            let combined = if stderr.is_empty() { stdout } else { format!("{}{}", stdout, stderr) };
-            FileResult {
-                success: out.status.success(),
-                content: Some(if combined.trim().is_empty() { "(no output)".to_string() } else { combined }),
-                entries: None,
-                error: if out.status.success() { None } else { Some(format!("exit: {}", out.status.code().unwrap_or(1))) },
+    let stdout = child.stdout.take();
+    let stderr = child.stderr.take();
+
+    // Read stdout in background
+    if let Some(mut out) = stdout {
+        let term = term.clone();
+        std::thread::spawn(move || {
+            use std::io::Read;
+            let mut buf = [0u8; 4096];
+            loop {
+                match out.read(&mut buf) {
+                    Ok(0) => break,
+                    Ok(n) => { let mut t = term.lock().unwrap(); t.output.extend_from_slice(&buf[..n]); }
+                    Err(_) => break,
+                }
             }
-        }
-        Err(e) => FileResult { success: false, content: None, entries: None, error: Some(format!("{}", e)) },
+        });
     }
+    if let Some(mut err) = stderr {
+        let term = term.clone();
+        std::thread::spawn(move || {
+            use std::io::Read;
+            let mut buf = [0u8; 4096];
+            loop {
+                match err.read(&mut buf) {
+                    Ok(0) => break,
+                    Ok(n) => { let mut t = term.lock().unwrap(); t.output.extend_from_slice(&buf[..n]); }
+                    Err(_) => break,
+                }
+            }
+        });
+    }
+
+    // Wait for process in background, mark done when finished
+    let term = term.clone();
+    std::thread::spawn(move || {
+        let status = child.wait();
+        let mut t = term.lock().unwrap();
+        t.done = true;
+        t.exit_code = status.ok().and_then(|s| s.code());
+    });
+
+    FileResult { success: true, content: Some("started".to_string()), entries: None, error: None }
 }
 
 #[tauri::command]
