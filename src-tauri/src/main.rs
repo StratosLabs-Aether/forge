@@ -32,6 +32,7 @@ use tauri::State;
 
 struct TerminalState {
     output: Vec<u8>,
+    stdin: Option<std::process::ChildStdin>,
     done: bool,
     exit_code: Option<i32>,
 }
@@ -386,8 +387,17 @@ fn terminal_read(state: State<ForgeState>) -> FileResult {
 
 #[tauri::command]
 fn terminal_write(text: String, state: State<ForgeState>) -> FileResult {
-    // Shell commands execute via run_shell — not interactive stdin
-    FileResult { success: false, content: None, entries: None, error: Some("Type command and press Enter".to_string()) }
+    use std::io::Write;
+    let mut term = state.terminal.lock().unwrap();
+    if let Some(ref mut stdin) = term.stdin {
+        let line = format!("{}\n", text);
+        match stdin.write_all(line.as_bytes()) {
+            Ok(_) => FileResult { success: true, content: None, entries: None, error: None },
+            Err(e) => FileResult { success: false, content: None, entries: None, error: Some(e.to_string()) },
+        }
+    } else {
+        FileResult { success: false, content: None, entries: None, error: Some("No running process".to_string()) }
+    }
 }
 
 #[tauri::command]
@@ -402,13 +412,21 @@ fn run_shell(command: String, state: State<ForgeState>) -> FileResult {
     let term = state.terminal.clone();
     {
         let mut t = term.lock().unwrap();
-        t.output.clear(); t.done = false; t.exit_code = None;
+        t.output.clear(); t.done = false; t.exit_code = None; t.stdin = None;
     }
 
+    // Wrap in `script` for PTY (enables sudo password prompts)
+    let shell_cmd = if which::which("script").is_ok() {
+        format!("script -q -c '{}' /dev/null", command.replace('\'', "'\\''"))
+    } else {
+        command
+    };
+
     let mut cmd = std::process::Command::new("sh");
-    cmd.arg("-c").arg(&command);
+    cmd.arg("-c").arg(&shell_cmd);
     cmd.stdout(std::process::Stdio::piped());
     cmd.stderr(std::process::Stdio::piped());
+    cmd.stdin(std::process::Stdio::piped());
 
     let mut child = match cmd.spawn() {
         Ok(c) => c,
@@ -417,20 +435,21 @@ fn run_shell(command: String, state: State<ForgeState>) -> FileResult {
 
     let stdout = child.stdout.take();
     let stderr = child.stderr.take();
+    let stdin = child.stdin.take();
 
-    // Read stdout in background
+    // Store stdin so terminal_write can send input
+    {
+        let mut t = term.lock().unwrap();
+        t.stdin = stdin;
+    }
+
+    // Read stdout/stderr in background
     if let Some(mut out) = stdout {
         let term = term.clone();
         std::thread::spawn(move || {
             use std::io::Read;
             let mut buf = [0u8; 4096];
-            loop {
-                match out.read(&mut buf) {
-                    Ok(0) => break,
-                    Ok(n) => { let mut t = term.lock().unwrap(); t.output.extend_from_slice(&buf[..n]); }
-                    Err(_) => break,
-                }
-            }
+            loop { match out.read(&mut buf) { Ok(0) => break, Ok(n) => { let mut t = term.lock().unwrap(); t.output.extend_from_slice(&buf[..n]); } Err(_) => break, } }
         });
     }
     if let Some(mut err) = stderr {
@@ -438,23 +457,16 @@ fn run_shell(command: String, state: State<ForgeState>) -> FileResult {
         std::thread::spawn(move || {
             use std::io::Read;
             let mut buf = [0u8; 4096];
-            loop {
-                match err.read(&mut buf) {
-                    Ok(0) => break,
-                    Ok(n) => { let mut t = term.lock().unwrap(); t.output.extend_from_slice(&buf[..n]); }
-                    Err(_) => break,
-                }
-            }
+            loop { match err.read(&mut buf) { Ok(0) => break, Ok(n) => { let mut t = term.lock().unwrap(); t.output.extend_from_slice(&buf[..n]); } Err(_) => break, } }
         });
     }
 
-    // Wait for process in background, mark done when finished
+    // Background wait for child
     let term = term.clone();
     std::thread::spawn(move || {
         let status = child.wait();
         let mut t = term.lock().unwrap();
-        t.done = true;
-        t.exit_code = status.ok().and_then(|s| s.code());
+        t.done = true; t.exit_code = status.ok().and_then(|s| s.code()); t.stdin = None;
     });
 
     FileResult { success: true, content: Some("started".to_string()), entries: None, error: None }
@@ -807,6 +819,7 @@ fn main() {
             lsp_process: Mutex::new(None),
             terminal: Arc::new(Mutex::new(TerminalState {
                 output: Vec::new(),
+                stdin: None,
                 done: true,
                 exit_code: None,
             })),
