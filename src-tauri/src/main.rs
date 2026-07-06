@@ -24,7 +24,6 @@ use std::path::PathBuf;
 use std::process::{Child, Command, Stdio};
 use std::sync::Mutex;
 use tauri::State;
-use tauri::Emitter;
 
 // ═══════════════════════════════════════════════════════════════════
 // State
@@ -262,7 +261,7 @@ fn check_setup(model_name: String) -> SetupStatus {
 }
 
 #[tauri::command]
-fn run_aether(path: String, debug: bool, state: State<ForgeState>, app: tauri::AppHandle) -> FileResult {
+fn run_aether(path: String, debug: bool, state: State<ForgeState>) -> FileResult {
     if let Ok(mut proc) = state.aether_process.lock() {
         if let Some(ref mut child) = *proc { let _ = child.kill(); }
     }
@@ -271,69 +270,31 @@ fn run_aether(path: String, debug: bool, state: State<ForgeState>, app: tauri::A
         Some(p) => p,
         None => return FileResult {
             success: false, content: None, entries: None,
-            error: Some("Aether is not installed.\n\nInstall it:\n  curl -fsSL https://raw.githubusercontent.com/StratosLabs-Aether/source/main/aether-native/install.sh | bash\n\nOr:\n  git clone https://github.com/StratosLabs-Aether/source\n  cd source && bash aether-native/install.sh".to_string()),
+            error: Some("Aether is not installed.\n\nInstall it:\n  curl -fsSL https://raw.githubusercontent.com/StratosLabs-Aether/source/main/aether-native/install.sh | bash".to_string()),
         },
     };
 
     let mut cmd = std::process::Command::new(&aether_bin);
     if debug { cmd.arg("--debug"); }
     cmd.arg(&path);
-    cmd.stdout(std::process::Stdio::piped());
-    cmd.stderr(std::process::Stdio::piped());
 
-    let mut child = match cmd.spawn() {
-        Ok(c) => c,
-        Err(e) => return FileResult {
-            success: false, content: None, entries: None,
-            error: Some(format!("Could not run aether: {}. Install it: curl -fsSL https://raw.githubusercontent.com/StratosLabs-Aether/source/main/aether-native/install.sh | bash", e)),
-        },
-    };
-
-    // Store process handle for stop button
-    if let Ok(mut proc) = state.aether_process.lock() {
-        *proc = Some(child);
-    }
-
-    // Read stdout line by line and emit events to frontend
-    if let Ok(mut proc) = state.aether_process.lock() {
-        if let Some(ref mut child) = *proc {
-            use std::io::{BufRead, BufReader};
-            if let Some(stdout) = child.stdout.take() {
-                let app_clone = app.clone();
-                std::thread::spawn(move || {
-                    let reader = BufReader::new(stdout);
-                    for line in reader.lines() {
-                        match line {
-                            Ok(text) => {
-                                let _ = app_clone.emit("terminal-line", text);
-                            }
-                            Err(_) => break,
-                        }
-                    }
-                });
-            }
-            if let Some(stderr) = child.stderr.take() {
-                let app_clone = app.clone();
-                std::thread::spawn(move || {
-                    let reader = BufReader::new(stderr);
-                    for line in reader.lines() {
-                        match line {
-                            Ok(text) => {
-                                let _ = app_clone.emit("terminal-line", format!("\x1b[31m{}\x1b[0m", text));
-                            }
-                            Err(_) => break,
-                        }
-                    }
-                });
+    match cmd.output() {
+        Ok(output) => {
+            let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+            let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+            let combined = format!("{}{}", stdout, if stderr.is_empty() { String::new() } else { format!("\n{}", stderr) });
+            let status = output.status;
+            FileResult {
+                success: status.success(),
+                content: Some(if combined.trim().is_empty() { "(no output)".to_string() } else { combined }),
+                entries: None,
+                error: if status.success() { None } else { Some(format!("exit code: {}", status.code().unwrap_or(1))) },
             }
         }
-    }
-
-    FileResult {
-        success: true,
-        content: Some("Running in embedded terminal...".to_string()),
-        entries: None,
-        error: None,
+        Err(e) => FileResult {
+            success: false, content: None, entries: None,
+            error: Some(format!("Could not run aether: {}. Is it installed?", e)),
+        },
     }
 }
 
@@ -731,7 +692,6 @@ fn main() {
             write_file,
             list_dir,
             run_aether,
-            run_aether_terminal,
             stop_execution,
             scrible_complete,
             scrible_chat,

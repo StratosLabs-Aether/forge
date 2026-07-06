@@ -147,11 +147,11 @@ Forge.runFile = async function(debug) {
   switchPanel('terminal');
   logTerminal('⚡ Running: '+tab.name+'\n');
   var result = await invoke('run_aether',{path:tab.path,debug:!!debug});
+  if (result && result.content) {
+    logTerminal(result.content);
+  }
   if (result && result.error) {
     logTerminal('\n❌ ' + result.error + '\n');
-  }
-  if (result && result.content && result.content.indexOf('Running') < 0) {
-    logTerminal(result.content);
   }
 };
 
