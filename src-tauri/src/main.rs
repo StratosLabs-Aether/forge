@@ -646,6 +646,11 @@ async fn check_forge_update() -> UpdateResult {
 // ═══════════════════════════════════════════════════════════════════
 
 fn main() {
+    // Fix Wayland/WebKit rendering on Linux
+    std::env::set_var("WEBKIT_DISABLE_COMPOSITING_MODE", "1");
+    std::env::set_var("WEBKIT_DISABLE_DMABUF_RENDERER", "1");
+    std::env::set_var("GDK_BACKEND", "x11");
+
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_fs::init())
