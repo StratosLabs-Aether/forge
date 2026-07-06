@@ -248,9 +248,10 @@ fn check_setup(model_name: String) -> SetupStatus {
         false
     };
 
+    let has_aether = aether.is_some();
+
     SetupStatus {
         aether_installed: has_aether,
-    let has_aether = aether.is_some();
         aether_path: aether,
         ollama_installed: ollama.is_some(),
         ollama_running,
