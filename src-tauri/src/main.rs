@@ -375,34 +375,52 @@ fn run_aether(path: String, debug: bool, state: State<ForgeState>) -> FileResult
 
 #[tauri::command]
 fn terminal_read(state: State<ForgeState>) -> FileResult {
-    let mut term = state.terminal.lock().unwrap();
-    let text = String::from_utf8_lossy(&term.output).to_string();
-    let exit = term.exit_code;
-    // Check if process is done
-    if !term.done {
+    // Get current output (quick lock)
+    let (text, mut done, mut exit_code) = {
+        let term = state.terminal.lock().unwrap();
+        (String::from_utf8_lossy(&term.output).to_string(), term.done, term.exit_code)
+    };
+
+    // Check if process exited (separate lock, no deadlock)
+    if !done {
         if let Ok(mut proc) = state.aether_process.lock() {
             if let Some(ref mut child) = *proc {
                 match child.try_wait() {
                     Ok(Some(status)) => {
-                        term.done = true;
-                        term.exit_code = status.code();
+                        done = true;
+                        exit_code = status.code();
+                        // Small delay for reader threads to flush
+                        std::thread::sleep(std::time::Duration::from_millis(50));
                     }
                     Ok(None) => {} // still running
-                    Err(_) => { term.done = true; }
+                    Err(_) => { done = true; }
                 }
             } else {
-                term.done = true;
+                done = true;
             }
         }
     }
-    let done = term.done;
-    let exit_code = term.exit_code;
-    drop(term);
+
+    // Update terminal state
+    if done {
+        let mut term = state.terminal.lock().unwrap();
+        term.done = true;
+        term.exit_code = exit_code;
+        // Re-read output after flush delay
+        let final_text = String::from_utf8_lossy(&term.output).to_string();
+        return FileResult {
+            success: true,
+            content: Some(final_text),
+            entries: None,
+            error: exit_code.map(|c| format!("exit: {}", c)),
+        };
+    }
+
     FileResult {
         success: true,
         content: Some(text),
         entries: None,
-        error: if done { exit_code.map(|c| format!("exit: {}", c)) } else { None },
+        error: None,
     }
 }
 
