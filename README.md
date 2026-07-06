@@ -30,9 +30,9 @@ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 
 # 3. Clone and build
 git clone https://github.com/StratosLabs-Aether/forge
-cd forge
-bash install.sh
-# → binary at ~/.local/bin/aether-forge (no sudo needed)
+cd forge/src-tauri
+cargo build --release
+# → binary at target/release/aether-forge
 ```
 
 ### 🧪 Development mode
