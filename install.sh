@@ -9,7 +9,7 @@ export PATH="${FORGE_DIR}/bin:${HOME}/.local/bin:${PATH}"
 echo ""
 bold "⚒  Aether Forge"
 
-# ── Get VS Codium ─────────────────────────────────────────
+# ── VS Codium ─────────────────────────────────────────────
 if ! command -v codium &>/dev/null; then
   if [[ ! -f "${FORGE_DIR}/bin/codium" ]]; then
     echo "→ Downloading VS Codium..."
@@ -23,28 +23,26 @@ fi
 CODIUM="$(which codium 2>/dev/null || echo "${FORGE_DIR}/bin/codium")"
 green "✓ VS Codium"
 
-# ── Clone forge for extensions ────────────────────────────
+# ── Clone forge repo for extensions ───────────────────────
 rm -rf /tmp/forge-ext 2>/dev/null
 git clone --depth 1 https://github.com/StratosLabs-Aether/forge.git /tmp/forge-ext 2>/dev/null
 
-# ── Install via .vsix ─────────────────────────────────────
+# ── Copy extensions to standard VS Codium dir ─────────────
 echo "→ Installing extensions..."
-"$CODIUM" --install-extension /tmp/forge-ext/extensions/aether-support.vsix --force 2>/dev/null
-green "  ✓ Aether Language"
-"$CODIUM" --install-extension /tmp/forge-ext/extensions/aether-icons.vsix --force 2>/dev/null
-green "  ✓ Aether Icons"
+EXT_DIR="${HOME}/.vscode-oss/extensions"
+rm -rf "${EXT_DIR}/stratos-labs."* 2>/dev/null
+mkdir -p "$EXT_DIR"
 
-# Scrible: copy source (no .vsix)
-SCRIBLE_DIR="${HOME}/.vscode-oss/extensions/stratos-labs.aether-scrible"
-rm -rf "$SCRIBLE_DIR" 2>/dev/null
-mkdir -p "$SCRIBLE_DIR"
-cp -r /tmp/forge-ext/extensions/aether-scrible/* "$SCRIBLE_DIR/"
-green "  ✓ Scrible AI"
+cp -r /tmp/forge-ext/extensions/aether-language   "${EXT_DIR}/stratos-labs.aether-support"
+cp -r /tmp/forge-ext/extensions/aether-file-icons "${EXT_DIR}/stratos-labs.aether-file-icons"
+cp -r /tmp/forge-ext/extensions/aether-scrible    "${EXT_DIR}/stratos-labs.aether-scrible"
+green "  ✓ Aether extensions"
 
 rm -rf /tmp/forge-ext
 
-# ── Forge settings ────────────────────────────────────────
+# ── Forge settings (isolated) ─────────────────────────────
 FORGE_DATA="${FORGE_DIR}/user-data"
+rm -rf "$FORGE_DATA" 2>/dev/null
 mkdir -p "${FORGE_DATA}/User"
 cat > "${FORGE_DATA}/User/settings.json" <<'JSONEOF'
 {
@@ -69,7 +67,6 @@ cat > ~/.local/bin/forge <<LAUNCHEOF
 exec "${CODIUM}" --user-data-dir "${FORGE_DATA}" --new-window "\$@"
 LAUNCHEOF
 chmod +x ~/.local/bin/forge
-
 curl -fsSL "https://raw.githubusercontent.com/StratosLabs-Aether/forge/main/icons/forge-256.png" -o "${FORGE_DIR}/icons/forge.png" 2>/dev/null || true
 cat > ~/.local/share/applications/aether-forge.desktop <<DESKEOF
 [Desktop Entry]
@@ -83,7 +80,6 @@ DESKEOF
 update-desktop-database ~/.local/share/applications/ 2>/dev/null || true
 green "✓ Launcher"
 
-echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-green "✓ Aether Forge installed — $(bold 'forge .')"
+green "✓ Aether Forge — $(bold 'forge .')"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
