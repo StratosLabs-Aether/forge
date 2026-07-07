@@ -21,7 +21,7 @@ echo "  Install: ${FORGE_DIR}"
 echo ""
 
 # ── Step 1: Download VS Codium (portable) ──────────────────
-if [[ ! -f "${FORGE_DIR}/bin/codium" ]]; then
+if [[ ! -f "${FORGE_DIR}/bin/codium" && ! -f "${FORGE_DIR}/codium" ]]; then
   echo "→ Downloading VS Codium..."
   OS="$(uname -s)"
   ARCH="$(uname -m)"
@@ -84,6 +84,17 @@ if [[ ! -f "${FORGE_DIR}/bin/codium" ]]; then
   green "✓ VS Codium downloaded"
 fi
 
+# Find the actual codium binary
+CODIUM_BIN=""
+for candidate in "${FORGE_DIR}/bin/codium" "${FORGE_DIR}/codium" "${FORGE_DIR}/vscodium/bin/codium"; do
+  if [[ -f "$candidate" ]]; then CODIUM_BIN="$candidate"; break; fi
+done
+CODIUM_BIN="${CODIUM_BIN:-$(find "${FORGE_DIR}" -name "codium" -type f -not -path "*/resources/*" 2>/dev/null | head -1)}"
+if [[ -z "$CODIUM_BIN" ]]; then
+  red "Could not locate codium binary."
+  exit 1
+fi
+
 # ── Step 2: Set up portable data directory ─────────────────
 DATA_DIR="${FORGE_DIR}/data"
 mkdir -p "${DATA_DIR}/extensions" "${DATA_DIR}/user-data/User"
@@ -133,7 +144,7 @@ echo "→ Creating launcher..."
 mkdir -p "$(dirname "$FORGE_BIN")"
 cat > "$FORGE_BIN" <<LAUNCHEOF
 #!/usr/bin/env bash
-exec "${FORGE_DIR}/vscodium/bin/codium" --user-data-dir "${DATA_DIR}/user-data" --extensions-dir "${DATA_DIR}/extensions" "\$@"
+exec "${CODIUM_BIN}" --user-data-dir "${DATA_DIR}/user-data" --extensions-dir "${DATA_DIR}/extensions" "\$@"
 LAUNCHEOF
 chmod +x "$FORGE_BIN"
 green "✓ Launcher: forge"
