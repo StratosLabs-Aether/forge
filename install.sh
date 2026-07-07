@@ -1,121 +1,85 @@
 #!/usr/bin/env bash
 set -euo pipefail
-
-bold()  { printf '\033[1m%s\033[0m' "$1"; }
-green() { printf '\033[32m%s\033[0m' "$1"; }
-warn()  { printf '\033[33m%s\033[0m' "$1" >&2; }
-red()   { printf '\033[31m%s\033[0m' "$1"; }
-
-FORGE_DIR="${HOME}/.aether-forge"
-FORGE_BIN="${HOME}/.local/bin/forge"
-DATA="${FORGE_DIR}/data"
-EXT="${DATA}/extensions"
-SETTINGS="${DATA}/user-data/User/settings.json"
-
+green() { printf '\033[32m%s\033[0m\n' "$1"; }
 echo ""
-bold "⚒  Aether Forge Installer"
+echo "⚒  Aether Forge Installer"
 
-# ── Clone forge ───────────────────────────────────────────
-FORGE_REPO="${FORGE_DIR}/forge-repo"
-rm -rf "$FORGE_REPO" 2>/dev/null || true
-echo "→ Fetching..."
-git clone --depth 1 https://github.com/StratosLabs-Aether/forge.git "$FORGE_REPO" 2>/dev/null || { red "Clone failed"; exit 1; }
-
-# ── Download VS Codium ────────────────────────────────────
-if [[ ! -f "${FORGE_DIR}/bin/codium" && ! -f "${FORGE_DIR}/codium" ]]; then
-  echo "→ Downloading VS Codium..."
-  case "$(uname -m)" in
-    x86_64) URL="https://github.com/VSCodium/vscodium/releases/download/1.96.0.24347/VSCodium-linux-x64-1.96.0.24347.tar.gz" ;;
-    aarch64) URL="https://github.com/VSCodium/vscodium/releases/download/1.96.0.24347/VSCodium-linux-arm64-1.96.0.24347.tar.gz" ;;
-    *) red "Unsupported arch"; exit 1 ;;
-  esac
-  mkdir -p "$FORGE_DIR"
-  TMP="/tmp/forge-vscodium.tar.gz"
-  curl -fsSL -o "$TMP" "$URL" || { red "Download failed"; exit 1; }
-  tar -xzf "$TMP" -C "$FORGE_DIR"
-  rm -f "$TMP"
+# ── Install VS Codium ─────────────────────────────────────
+if ! command -v codium &>/dev/null && ! command -v code &>/dev/null; then
+  echo "→ Installing VS Codium..."
+  wget -qO - https://gitlab.com/paulcarroty/vscodium-deb-rpm-repo/raw/master/pub.gpg 2>/dev/null | gpg --dearmor 2>/dev/null | sudo dd of=/usr/share/keyrings/vscodium-archive-keyring.gpg 2>/dev/null
+  echo 'deb [signed-by=/usr/share/keyrings/vscodium-archive-keyring.gpg] https://download.vscodium.com/debs vscodium main' | sudo tee /etc/apt/sources.list.d/vscodium.list >/dev/null
+  sudo apt update -qq && sudo apt install -y codium 2>&1 | tail -1
 fi
+green "✓ VS Codium"
 
-CODIUM=""
-for c in "${FORGE_DIR}/bin/codium" "${FORGE_DIR}/codium"; do
-  [[ -f "$c" ]] && { CODIUM="$c"; break; }
-done
-CODIUM="${CODIUM:-$(find "${FORGE_DIR}" -name codium -type f -not -path '*/resources/*' 2>/dev/null | head -1)}"
-[[ -z "$CODIUM" ]] && { red "codium not found"; exit 1; }
+# ── Clone forge & copy extensions ─────────────────────────
+echo "→ Installing Aether extensions..."
+rm -rf /tmp/forge-ext 2>/dev/null
+git clone --depth 1 https://github.com/StratosLabs-Aether/forge.git /tmp/forge-ext 2>/dev/null
 
-# ── Install extensions ────────────────────────────────────
-echo "→ Installing extensions..."
-rm -rf "${EXT}" 2>/dev/null || true
-mkdir -p "${EXT}" "${DATA}/user-data/User"
+EXT_DIR="${HOME}/.vscode-oss/extensions"
+[[ -d "${HOME}/.vscode/extensions" ]] && EXT_DIR="${HOME}/.vscode/extensions"
 
-cp_ext() {
-  local src="$1" name="$2"
-  local dst="${EXT}/${name}"
+for ext in aether-language aether-file-icons aether-scrible; do
+  case "$ext" in
+    aether-language) id="stratos-labs.aether-support" ;;
+    aether-file-icons) id="stratos-labs.aether-file-icons" ;;
+    aether-scrible) id="stratos-labs.aether-scrible" ;;
+  esac
+  dst="${EXT_DIR}/${id}"
+  rm -rf "$dst" 2>/dev/null
   mkdir -p "$dst"
-  cp -r "${FORGE_REPO}/extensions/${src}/"* "$dst/"
-  green "  ✓ ${name}"
-}
-
-cp_ext "aether-language"   "stratos-labs.aether-support"
-cp_ext "aether-file-icons" "stratos-labs.aether-file-icons"
-cp_ext "aether-scrible"    "stratos-labs.aether-scrible"
-
-# Use folder names that match extension ID (publisher.name)
-# The aether-language folder has name "aether-support" in package.json
-# VS Codium uses the folder name as fallback ID
+  cp -r /tmp/forge-ext/extensions/${ext}/* "$dst/"
+  green "  ✓ ${id}"
+done
+rm -rf /tmp/forge-ext
 
 # ── Settings ──────────────────────────────────────────────
-cat > "$SETTINGS" <<'JSONEOF'
+DIR="${HOME}/.config/VSCodium/User"
+[[ -d "${HOME}/.config/Code/User" ]] && DIR="${HOME}/.config/Code/User"
+mkdir -p "$DIR"
+
+cat > "${DIR}/settings.json" <<'JSONEOF'
 {
   "workbench.colorTheme": "Aether Dark",
   "workbench.iconTheme": "aether-seti-icons",
   "files.associations": { "*.ath": "aether", "*.glo": "aether" },
   "telemetry.telemetryLevel": "off",
   "update.mode": "none",
-  "extensions.autoUpdate": false,
   "window.title": "Aether Forge — ${activeEditorShort}",
   "workbench.startupEditor": "none"
 }
 JSONEOF
-
-cat > "${DATA}/user-data/User/keybindings.json" <<'KEYEOF'
+cat > "${DIR}/keybindings.json" <<'JSONEOF'
 [
-  { "key": "f5", "command": "aether.runCurrentFile", "when": "editorLangId == 'aether'" },
-  { "key": "ctrl+f5", "command": "aether.debugCurrentFile", "when": "editorLangId == 'aether'" }
+  { "key": "f5", "command": "aether.runCurrentFile", "when": "editorLangId == 'aether'" }
 ]
-KEYEOF
+JSONEOF
+green "✓ Settings"
 
-# ── Launcher + Desktop ────────────────────────────────────
+# ── Desktop entry ─────────────────────────────────────────
 mkdir -p ~/.local/bin ~/.local/share/applications
-cat > "$FORGE_BIN" <<LAUNCHEOF
-#!/usr/bin/env bash
-exec "${CODIUM}" --user-data-dir "${DATA}/user-data" --extensions-dir "${EXT}" "\$@"
-LAUNCHEOF
-chmod +x "$FORGE_BIN"
+ln -sf "$(which codium 2>/dev/null || which code)" ~/.local/bin/forge 2>/dev/null
 
-if [[ -d "${FORGE_REPO}/icons" ]]; then
-  mkdir -p "${FORGE_DIR}/share/icons"
-  cp "${FORGE_REPO}/icons/forge-256.png" "${FORGE_DIR}/share/icons/forge.png"
-fi
+curl -fsSL "https://raw.githubusercontent.com/StratosLabs-Aether/forge/main/icons/forge-256.png" -o ~/.aether-forge/icons/forge.png 2>/dev/null
+mkdir -p ~/.aether-forge/icons
 
 cat > ~/.local/share/applications/aether-forge.desktop <<DESKEOF
 [Desktop Entry]
 Name=Aether Forge
-Comment=IDE for the Aether language
-Exec=${FORGE_BIN} %F
-Icon=${FORGE_DIR}/share/icons/forge.png
+Exec=codium %F
+Icon=${HOME}/.aether-forge/icons/forge.png
 Terminal=false
 Type=Application
 Categories=Development;IDE;
-StartupWMClass=codium
 DESKEOF
-command -v update-desktop-database &>/dev/null && update-desktop-database ~/.local/share/applications/ 2>/dev/null || true
+update-desktop-database ~/.local/share/applications/ 2>/dev/null || true
+green "✓ Desktop entry"
 
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-green "✓ Aether Forge installed!"
-echo "  $(bold 'forge')    — launch IDE"
-echo "  $(bold 'forge .')  — open current directory"
-echo "  F5        — run .ath file"
 echo ""
-echo "  Scrible AI:  bash ${FORGE_REPO}/install-models.sh"
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+green "✓ Aether Forge installed!"
+echo "  codium .   — launch"
+echo "  F5         — run .ath file"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
