@@ -407,6 +407,9 @@ fn stop_lsp(state: State<ForgeState>) -> FileResult {
 // ═══════════════════════════════════════════════════════════════════
 
 fn main() {
+    // Fix blank window on Wayland: force X11 backend
+    std::env::set_var("GDK_BACKEND", "x11");
+
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_fs::init())
