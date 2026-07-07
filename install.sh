@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # =============================================================================
-# Aether Forge — One-command install (VS Codium-based IDE)
+# Aether Forge — Standalone IDE installer (VS Codium portable)
 # =============================================================================
 #   curl -fsSL https://raw.githubusercontent.com/StratosLabs-Aether/forge/main/install.sh | bash
 # =============================================================================
@@ -13,115 +13,143 @@ warn()  { printf '\033[33m%s\033[0m' "$1" >&2; }
 red()   { printf '\033[31m%s\033[0m' "$1"; }
 
 FORGE_DIR="${HOME}/.aether-forge"
-EXT_DIR="${HOME}/.vscode-oss/extensions"
+FORGE_BIN="${HOME}/.local/bin/forge"
 
 echo ""
 bold "⚒  Aether Forge Installer"
+echo "  Install: ${FORGE_DIR}"
 echo ""
 
-# ── Step 0: Get Forge files ───────────────────────────────
-if [[ ! -d "${FORGE_DIR}/extensions" ]]; then
-  echo "→ Fetching Aether Forge files..."
-  rm -rf "${FORGE_DIR}" 2>/dev/null || true
-  git clone --depth 1 https://github.com/StratosLabs-Aether/forge.git "${FORGE_DIR}" 2>/dev/null || {
-    red "Failed to download Forge. Check your internet connection."
+# ── Step 1: Download VS Codium (portable) ──────────────────
+if [[ ! -f "${FORGE_DIR}/bin/codium" ]]; then
+  echo "→ Downloading VS Codium..."
+  OS="$(uname -s)"
+  ARCH="$(uname -m)"
+  case "$OS" in
+    Linux)
+      case "$ARCH" in
+        x86_64)  VSCODIUM_URL="https://github.com/VSCodium/vscodium/releases/download/1.96.0.24347/VSCodium-linux-x64-1.96.0.24347.tar.gz" ;;
+        aarch64) VSCODIUM_URL="https://github.com/VSCodium/vscodium/releases/download/1.96.0.24347/VSCodium-linux-arm64-1.96.0.24347.tar.gz" ;;
+        *) red "Unsupported architecture: $ARCH"; exit 1 ;;
+      esac ;;
+    Darwin)
+      case "$ARCH" in
+        x86_64) VSCODIUM_URL="https://github.com/VSCodium/vscodium/releases/download/1.96.0.24347/VSCodium-darwin-x64-1.96.0.24347.zip" ;;
+        arm64)  VSCODIUM_URL="https://github.com/VSCodium/vscodium/releases/download/1.96.0.24347/VSCodium-darwin-arm64-1.96.0.24347.zip" ;;
+        *) red "Unsupported architecture: $ARCH"; exit 1 ;;
+      esac ;;
+    *) red "Unsupported OS: $OS"; exit 1 ;;
+  esac
+
+  mkdir -p "${FORGE_DIR}"
+  TMP_ARCHIVE="${FORGE_DIR}/vscodium.tar.gz"
+  curl -fsSL --location --connect-timeout 10 --max-time 300 -o "$TMP_ARCHIVE" "$VSCODIUM_URL" || {
+    red "Failed to download VS Codium. Check: ${VSCODIUM_URL}"
     exit 1
   }
-  green "✓ Forge files downloaded"
-fi
+  tar -xzf "$TMP_ARCHIVE" -C "${FORGE_DIR}" 2>/dev/null || {
+    # macOS zip
+    unzip -qo "$TMP_ARCHIVE" -d "${FORGE_DIR}" 2>/dev/null || { red "Failed to extract"; exit 1; }
+  }
+  rm -f "$TMP_ARCHIVE"
 
-# ── Step 1: Install VS Codium ──────────────────────────────
-echo "→ Checking code editor..."
-if command -v codium &>/dev/null; then
-  green "✓ VS Codium found"
-elif command -v code &>/dev/null; then
-  warn "VS Code detected — using VS Code instead of Codium."
-  EXT_DIR="${HOME}/.vscode/extensions"
-  green "✓ VS Code found"
-else
-  echo "→ Installing VS Codium..."
-  if command -v apt &>/dev/null; then
-    wget -qO - https://gitlab.com/paulcarroty/vscodium-deb-rpm-repo/raw/master/pub.gpg 2>/dev/null | gpg --dearmor 2>/dev/null | sudo dd of=/usr/share/keyrings/vscodium-archive-keyring.gpg 2>/dev/null
-    echo 'deb [signed-by=/usr/share/keyrings/vscodium-archive-keyring.gpg] https://download.vscodium.com/debs vscodium main' | sudo tee /etc/apt/sources.list.d/vscodium.list >/dev/null
-    sudo apt update -qq && sudo apt install -y codium 2>&1 | tail -1
-  elif command -v dnf &>/dev/null; then
-    sudo rpmkeys --import https://gitlab.com/paulcarroty/vscodium-deb-rpm-repo/raw/master/pub.gpg 2>/dev/null
-    printf "[vscodium]\nname=VS Codium\nbaseurl=https://download.vscodium.com/rpms/\nenabled=1\ngpgcheck=1\nrepo_gpgcheck=1\ngpgkey=https://gitlab.com/paulcarroty/vscodium-deb-rpm-repo/raw/master/pub.gpg\n" | sudo tee /etc/yum.repos.d/vscodium.repo >/dev/null
-    sudo dnf install -y codium 2>&1 | tail -1
-  elif command -v pacman &>/dev/null; then
-    yay -S vscodium-bin 2>/dev/null || paru -S vscodium-bin 2>/dev/null || warn "Install VS Codium manually: https://vscodium.com"
-  elif [[ "$(uname -s)" == "Darwin" ]]; then
-    brew install --cask vscodium 2>/dev/null || warn "Install VS Codium manually: https://vscodium.com"
-  else
-    warn "Could not auto-install VS Codium. Install manually: https://vscodium.com"
+  # Find the extracted directory and rename to bin/
+  VSCODIUM_EXTRACTED=$(find "${FORGE_DIR}" -maxdepth 2 -name "codium" -o -name "VSCodium" -type d 2>/dev/null | head -1)
+  if [[ -z "$VSCODIUM_EXTRACTED" ]]; then
+    # The tar extracts to a top-level directory, find the bin
+    VSCODIUM_DIR=$(find "${FORGE_DIR}" -maxdepth 2 -name "bin" -type d 2>/dev/null | head -1)
+    if [[ -n "$VSCODIUM_DIR" ]]; then
+      VSCODIUM_DIR=$(dirname "$VSCODIUM_DIR")
+      mkdir -p "${FORGE_DIR}/vscodium"
+      mv "${VSCODIUM_DIR}"/* "${FORGE_DIR}/vscodium/" 2>/dev/null || true
+      rmdir "${VSCODIUM_DIR}" 2>/dev/null || true
+    fi
   fi
-  green "✓ VS Codium installed"
+
+  # Ensure we have bin/codium
+  if [[ ! -f "${FORGE_DIR}/vscodium/bin/codium" ]]; then
+    # Try to locate codium binary
+    CODIUM_BIN=$(find "${FORGE_DIR}" -name "codium" -type f 2>/dev/null | head -1)
+    if [[ -z "$CODIUM_BIN" ]]; then
+      red "Could not find codium binary in the downloaded archive."
+      echo "Contents of ${FORGE_DIR}:"
+      ls -la "${FORGE_DIR}/"
+      exit 1
+    fi
+    CODIUM_ROOT=$(dirname $(dirname "$CODIUM_BIN"))
+    mkdir -p "${FORGE_DIR}/vscodium"
+    mv "${CODIUM_ROOT}"/* "${FORGE_DIR}/vscodium/" 2>/dev/null || true
+  fi
+
+  green "✓ VS Codium downloaded"
 fi
 
-# ── Step 2: Install Aether extensions ─────────────────────
+# ── Step 2: Set up portable data directory ─────────────────
+DATA_DIR="${FORGE_DIR}/data"
+mkdir -p "${DATA_DIR}/extensions" "${DATA_DIR}/user-data/User"
+
+# ── Step 3: Install Aether extensions ──────────────────────
 echo "→ Installing Aether Forge extensions..."
-mkdir -p "$EXT_DIR"
+
+# Clone forge repo for extensions if needed
+FORGE_REPO="${FORGE_DIR}/forge-repo"
+if [[ ! -d "${FORGE_REPO}/extensions" ]]; then
+  rm -rf "$FORGE_REPO" 2>/dev/null || true
+  git clone --depth 1 https://github.com/StratosLabs-Aether/forge.git "$FORGE_REPO" 2>/dev/null || {
+    red "Failed to fetch extensions"
+    exit 1
+  }
+fi
 
 install_ext() {
   local name="$1" display="$2"
-  local dest="${EXT_DIR}/${name}"
+  local dest="${DATA_DIR}/extensions/${name}"
   mkdir -p "$dest"
-  cp -r "${FORGE_DIR}/extensions/${name}/"* "$dest/"
+  cp -r "${FORGE_REPO}/extensions/${name}/"* "$dest/"
   green "  ✓ ${display}"
 }
-
 install_ext "aether-language"  "Aether Language Support"
 install_ext "aether-scrible"   "Scrible AI"
 
-# ── Step 3: Configure settings ────────────────────────────
+# ── Step 4: Configure settings (portable) ──────────────────
 echo "→ Configuring Aether Forge..."
-SETTINGS_DIR="${HOME}/.config/VSCodium/User"
-[[ "$EXT_DIR" == *".vscode/extensions" ]] && SETTINGS_DIR="${HOME}/.config/Code/User"
-mkdir -p "$SETTINGS_DIR"
-SETTINGS_FILE="${SETTINGS_DIR}/settings.json"
-
-if [[ -f "$SETTINGS_FILE" ]] && command -v jq &>/dev/null; then
-  jq '
-    .["workbench.colorTheme"] = "Aether Dark" |
-    .["workbench.iconTheme"] = "aether-seti-icons" |
-    .["files.associations"] = ((.["files.associations"] // {}) + {"*.ath": "aether", "*.glo": "aether"}) |
-    .["telemetry.telemetryLevel"] = "off" |
-    .["update.mode"] = "none" |
-    .["extensions.autoUpdate"] = false |
-    .["window.title"] = "Aether Forge ${activeEditorShort}"
-  ' "$SETTINGS_FILE" > "${SETTINGS_FILE}.tmp" && mv "${SETTINGS_FILE}.tmp" "$SETTINGS_FILE"
-else
-  cat > "$SETTINGS_FILE" <<'JSONEOF'
+SETTINGS_FILE="${DATA_DIR}/user-data/User/settings.json"
+cat > "$SETTINGS_FILE" <<'JSONEOF'
 {
   "workbench.colorTheme": "Aether Dark",
   "workbench.iconTheme": "aether-seti-icons",
   "files.associations": { "*.ath": "aether", "*.glo": "aether" },
   "telemetry.telemetryLevel": "off",
   "update.mode": "none",
-  "window.title": "Aether Forge ${activeEditorShort}"
+  "extensions.autoUpdate": false,
+  "window.title": "Aether Forge — ${activeEditorShort}",
+  "workbench.startupEditor": "none"
 }
 JSONEOF
-fi
 green "✓ Settings configured"
 
-# ── Step 4: Create launcher ───────────────────────────────
-LAUNCHER="${HOME}/.local/bin/forge"
-mkdir -p "${HOME}/.local/bin"
-cat > "$LAUNCHER" <<'LAUNCHEOF'
+# ── Step 5: Create launcher ────────────────────────────────
+echo "→ Creating launcher..."
+mkdir -p "$(dirname "$FORGE_BIN")"
+cat > "$FORGE_BIN" <<LAUNCHEOF
 #!/usr/bin/env bash
-exec codium "$@" 2>/dev/null || exec code "$@"
+exec "${FORGE_DIR}/vscodium/bin/codium" --user-data-dir "${DATA_DIR}/user-data" --extensions-dir "${DATA_DIR}/extensions" "\$@"
 LAUNCHEOF
-chmod +x "$LAUNCHER"
+chmod +x "$FORGE_BIN"
 green "✓ Launcher: forge"
 
-# ── Step 5: Models ────────────────────────────────────────
+# ── Step 6: Done ──────────────────────────────────────────
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 bold "✓ Aether Forge installed!"
 echo ""
 echo "  Launch:   $(bold 'forge')"
-echo "  Or:       $(bold 'codium')"
+echo "  Open dir: $(bold 'forge .')"
 echo ""
 echo "  Scrible AI models (optional):"
-echo "    cd ${FORGE_DIR} && bash install-models.sh"
+echo "    bash ${FORGE_REPO}/install-models.sh"
+echo ""
+echo "  Your existing VS Code/Codium is untouched."
+echo "  Aether Forge uses its own data directory at:"
+echo "    ${DATA_DIR}"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"

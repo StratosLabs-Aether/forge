@@ -1,6 +1,6 @@
 # ⚒ Aether Forge
 
-The official IDE for the [Aether](https://github.com/StratosLabs-Aether/source) programming language — powered by VS Codium.
+A standalone IDE for the [Aether](https://github.com/StratosLabs-Aether/source) language — powered by VS Codium in portable mode. Does not touch your existing VS Code installation.
 
 ## Install
 
@@ -11,19 +11,20 @@ curl -fsSL https://raw.githubusercontent.com/StratosLabs-Aether/forge/main/insta
 ## What's included
 
 - **Aether Language Support** — syntax highlighting, snippets, Aether Dark theme
-- **Scrible AI** — Ollama-powered chat and code completions (Phi-3 v3)
-- **Terminal** — xterm.js with full PTY support (ask(), sudo, SSH all work)
-- **No telemetry** — built on VS Codium, all tracking removed
+- **Scrible AI** — Ollama-powered chat and completions (Phi-3 v3)
+- **Terminal** — xterm.js with full PTY (ask(), sudo, SSH all work)
+- **Standalone** — portable mode, separate from your existing editor
+- **No telemetry** — all tracking removed
 
 ## Launch
 
 ```bash
-forge          # launcher command
-codium .       # open current directory
+forge          # launch Forge
+forge .        # open current directory
 ```
 
 ## Requirements
 
 - Linux, macOS, or Windows
 - [Aether](https://github.com/StratosLabs-Aether/source) (`curl -fsSL https://raw.githubusercontent.com/StratosLabs-Aether/source/main/scripts/install.sh | bash`)
-- [Ollama](https://ollama.com) (for Scrible AI)
+- [Ollama](https://ollama.com) for Scrible AI
