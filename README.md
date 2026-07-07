@@ -1,6 +1,6 @@
 # ⚒ Aether Forge IDE
 
-**Aether Forge** is the official native desktop IDE for the [Aether](https://github.com/stratos-labs/aether) programming language. Built with **Tauri 2.0 + Rust** for maximum performance, featuring a custom dark theme and the **Scrible AI agent** preinstalled — powered by **StarCoder2-3B**, heavily modified and trained for coding in Aether.
+**Aether Forge** is the official native desktop IDE for the [Aether](https://github.com/StratosLabs-Aether/source) programming language. Built with **Tauri 2.0 + Rust** for maximum performance, featuring a custom dark theme and the **Scrible AI agent** preinstalled — powered by **StarCoder2-3B**, heavily modified and trained for coding in Aether.
 
 > **Architecture**: Tauri 2.0 (Rust backend) + CodeMirror 6 (editor) + Tree-sitter (syntax) + Tower-LSP (intelligence)
 
