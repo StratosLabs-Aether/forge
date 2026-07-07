@@ -20,6 +20,18 @@ bold "⚒  Aether Forge Installer"
 echo "  Install: ${FORGE_DIR}"
 echo ""
 
+# ── Step 0: Get Forge resources ───────────────────────────
+FORGE_REPO="${FORGE_DIR}/forge-repo"
+if [[ ! -d "${FORGE_REPO}" ]]; then
+  echo "→ Fetching Aether Forge resources..."
+  rm -rf "$FORGE_REPO" 2>/dev/null || true
+  git clone --depth 1 https://github.com/StratosLabs-Aether/forge.git "$FORGE_REPO" 2>/dev/null || {
+    red "Failed to fetch Forge. Check your internet connection."
+    exit 1
+  }
+  green "✓ Forge resources downloaded"
+fi
+
 # ── Step 1: Download VS Codium (portable) ──────────────────
 if [[ ! -f "${FORGE_DIR}/bin/codium" && ! -f "${FORGE_DIR}/codium" ]]; then
   echo "→ Downloading VS Codium..."
@@ -82,6 +94,19 @@ if [[ ! -f "${FORGE_DIR}/bin/codium" && ! -f "${FORGE_DIR}/codium" ]]; then
   fi
 
   green "✓ VS Codium downloaded"
+
+  # ── Replace dock icon with Aether Forge logo ─────────────
+  if [[ -d "${FORGE_REPO}/icons" ]]; then
+    ICON_DIR="${FORGE_REPO}/icons"
+    # Replace codium.png wherever it exists in the extracted files
+    find "${FORGE_DIR}" -name "codium.png" -o -name "code.png" 2>/dev/null | while read -r icon; do
+      cp "${ICON_DIR}/forge-256.png" "$icon" 2>/dev/null || true
+    done
+    # Also place icon for .desktop / dock use
+    mkdir -p "${FORGE_DIR}/share/icons"
+    cp "${ICON_DIR}/forge-256.png" "${FORGE_DIR}/share/icons/forge.png" 2>/dev/null || true
+    green "  ✓ Aether Forge icon installed"
+  fi
 fi
 
 # Find the actual codium binary
@@ -101,16 +126,6 @@ mkdir -p "${DATA_DIR}/extensions" "${DATA_DIR}/user-data/User"
 
 # ── Step 3: Install Aether extensions ──────────────────────
 echo "→ Installing Aether Forge extensions..."
-
-# Clone forge repo for extensions if needed
-FORGE_REPO="${FORGE_DIR}/forge-repo"
-if [[ ! -d "${FORGE_REPO}/extensions" ]]; then
-  rm -rf "$FORGE_REPO" 2>/dev/null || true
-  git clone --depth 1 https://github.com/StratosLabs-Aether/forge.git "$FORGE_REPO" 2>/dev/null || {
-    red "Failed to fetch extensions"
-    exit 1
-  }
-fi
 
 install_ext() {
   local name="$1" display="$2"
