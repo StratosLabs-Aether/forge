@@ -300,22 +300,24 @@ fn run_aether(path: String, debug: bool, state: State<ForgeState>) -> FileResult
 
     let stdout = child.stdout.take();
     let stderr = child.stderr.take();
+    let stdin = child.stdin.take();
 
     // Store process handle for stop button
     if let Ok(mut proc) = state.aether_process.lock() {
         *proc = Some(child);
     }
 
-    // Reset terminal state
+    // Reset terminal state and store stdin for ask()
     let term = state.terminal.clone();
     {
         let mut t = term.lock().unwrap();
         t.output.clear();
         t.done = false;
         t.exit_code = None;
+        t.stdin = stdin;
     }
 
-    // Spawn reader threads
+    // Spawn reader threads — they mark done when pipes close (process exits)
     use std::io::Read;
     if let Some(mut out) = stdout {
         let term = term.clone();
@@ -331,6 +333,9 @@ fn run_aether(path: String, debug: bool, state: State<ForgeState>) -> FileResult
                     Err(_) => break,
                 }
             }
+            let mut t = term.lock().unwrap();
+            t.done = true;
+            t.stdin = None; // close stdin
         });
     }
     if let Some(mut err) = stderr {
@@ -350,18 +355,6 @@ fn run_aether(path: String, debug: bool, state: State<ForgeState>) -> FileResult
         });
     }
 
-    // Wait for process in background
-    if let Ok(mut proc) = state.aether_process.lock() {
-        if let Some(ref mut child) = *proc {
-            let term = term.clone();
-            // Can't move child out of mutex, so we track via state
-            std::thread::spawn(move || {
-                // The child is in the state mutex — we wait via the stored handle
-                // For now, just mark done after a delay (the stop button handles kill)
-            });
-        }
-    }
-
     FileResult {
         success: true,
         content: Some("started".to_string()),
@@ -377,11 +370,30 @@ fn terminal_read(state: State<ForgeState>) -> FileResult {
     let done = term.done;
     let exit_code = term.exit_code;
     drop(term);
+
+    // If done, try to get exit code from process handle
+    let exit = if done {
+        if let Ok(mut proc) = state.aether_process.lock() {
+            if let Some(ref mut child) = *proc {
+                match child.try_wait() {
+                    Ok(Some(status)) => {
+                        let code = status.code();
+                        // Update terminal state
+                        let mut t = state.terminal.lock().unwrap();
+                        t.exit_code = code;
+                        code
+                    }
+                    _ => exit_code,
+                }
+            } else { exit_code }
+        } else { exit_code }
+    } else { None };
+
     FileResult {
         success: true,
         content: Some(text),
         entries: None,
-        error: if done { exit_code.map(|c| format!("exit: {}", c)) } else { None },
+        error: if done { exit.map(|c| format!("exit: {}", c)) } else { None },
     }
 }
 
