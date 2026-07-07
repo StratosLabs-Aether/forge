@@ -27,24 +27,24 @@ green "✓ VS Codium"
 rm -rf /tmp/forge-ext 2>/dev/null
 git clone --depth 1 https://github.com/StratosLabs-Aether/forge.git /tmp/forge-ext 2>/dev/null
 
-# ── Copy extensions to standard VS Codium dir ─────────────
+# ── Extensions (into portable codium's natural data dir) ──
 echo "→ Installing extensions..."
-EXT_DIR="${HOME}/.vscode-oss/extensions"
-rm -rf "${EXT_DIR}/stratos-labs."* 2>/dev/null
-mkdir -p "$EXT_DIR"
-
-cp -r /tmp/forge-ext/extensions/aether-language   "${EXT_DIR}/stratos-labs.aether-support"
-cp -r /tmp/forge-ext/extensions/aether-file-icons "${EXT_DIR}/stratos-labs.aether-file-icons"
-cp -r /tmp/forge-ext/extensions/aether-scrible    "${EXT_DIR}/stratos-labs.aether-scrible"
+PORTABLE_DATA="${FORGE_DIR}/data"
+rm -rf "${PORTABLE_DATA}/extensions" 2>/dev/null
+mkdir -p "${PORTABLE_DATA}/extensions"
+cp -r /tmp/forge-ext/extensions/aether-language   "${PORTABLE_DATA}/extensions/stratos-labs.aether-support"
+cp -r /tmp/forge-ext/extensions/aether-file-icons "${PORTABLE_DATA}/extensions/stratos-labs.aether-file-icons"
+cp -r /tmp/forge-ext/extensions/aether-scrible    "${PORTABLE_DATA}/extensions/stratos-labs.aether-scrible"
 green "  ✓ Aether extensions"
 
 rm -rf /tmp/forge-ext
 
-# ── Forge settings (isolated) ─────────────────────────────
-FORGE_DATA="${FORGE_DIR}/user-data"
-rm -rf "$FORGE_DATA" 2>/dev/null
-mkdir -p "${FORGE_DATA}/User"
-cat > "${FORGE_DATA}/User/settings.json" <<'JSONEOF'
+# ── Forge settings (in portable codium's natural user-data) ──
+FORGE_USERDATA="${PORTABLE_DATA}/user-data"
+rm -rf "${FORGE_USERDATA}/User" 2>/dev/null
+mkdir -p "${FORGE_USERDATA}/User"
+
+cat > "${FORGE_USERDATA}/User/settings.json" <<'JSONEOF'
 {
   "workbench.colorTheme": "Aether Dark",
   "workbench.iconTheme": "aether-seti-icons",
@@ -55,16 +55,17 @@ cat > "${FORGE_DATA}/User/settings.json" <<'JSONEOF'
   "workbench.startupEditor": "none"
 }
 JSONEOF
-cat > "${FORGE_DATA}/User/keybindings.json" <<'KEYEOF'
+cat > "${FORGE_USERDATA}/User/keybindings.json" <<'KEYEOF'
 [{ "key": "f5", "command": "aether.runCurrentFile", "when": "editorLangId == 'aether'" }]
 KEYEOF
 green "✓ Settings"
 
 # ── Launcher + Desktop ────────────────────────────────────
 mkdir -p ~/.local/bin ~/.local/share/applications "${FORGE_DIR}/icons"
+# No --user-data-dir needed — portable codium auto-detects its data/ dir
 cat > ~/.local/bin/forge <<LAUNCHEOF
 #!/usr/bin/env bash
-exec "${CODIUM}" --user-data-dir "${FORGE_DATA}" --new-window "\$@"
+exec "${CODIUM}" --new-window "\$@"
 LAUNCHEOF
 chmod +x ~/.local/bin/forge
 curl -fsSL "https://raw.githubusercontent.com/StratosLabs-Aether/forge/main/icons/forge-256.png" -o "${FORGE_DIR}/icons/forge.png" 2>/dev/null || true
