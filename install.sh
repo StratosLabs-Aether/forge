@@ -136,6 +136,9 @@ install_ext "aether-file-icons" "Aether File Icons"
 install_ext "aether-language"  "Aether Language Support"
 install_ext "aether-scrible"   "Scrible AI"
 
+# Clear extension cache so new extensions load properly
+rm -f "${DATA_DIR}/extensions/.obsolete" "${DATA_DIR}/extensions/extensions.json" 2>/dev/null || true
+
 # ── Step 4: Configure settings (portable) ──────────────────
 echo "→ Configuring Aether Forge..."
 SETTINGS_FILE="${DATA_DIR}/user-data/User/settings.json"
