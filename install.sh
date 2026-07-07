@@ -9,6 +9,7 @@ echo ""
 bold "⚒  Aether Forge Installer"
 
 # ── Install system VS Codium ──────────────────────────────
+export PATH="${HOME}/.aether-forge/bin:${HOME}/.local/bin:${PATH}"
 if ! command -v codium &>/dev/null; then
   echo "→ Installing VS Codium..."
   wget -qO - https://gitlab.com/paulcarroty/vscodium-deb-rpm-repo/raw/master/pub.gpg 2>/dev/null | gpg --dearmor 2>/dev/null | sudo dd of=/usr/share/keyrings/vscodium-archive-keyring.gpg 2>/dev/null
