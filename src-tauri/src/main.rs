@@ -107,11 +107,6 @@ struct ChatMessage {
 
 // ── Integrated Terminal ─────────────────────────────────────────────
 
-#[derive(Debug, Deserialize)]
-struct ShellCommand {
-    command: String,
-}
-
 #[derive(Debug, Serialize, Clone)]
 struct TerminalResult {
     success: bool,
@@ -121,7 +116,7 @@ struct TerminalResult {
 }
 
 #[tauri::command]
-fn run_shell(state: State<ForgeState>, cmd: ShellCommand) -> TerminalResult {
+fn run_shell(state: State<ForgeState>, command: String) -> TerminalResult {
     // Kill any previous process
     if let Ok(mut proc) = state.terminal.process.lock() {
         if let Some(ref mut child) = *proc {
@@ -139,7 +134,7 @@ fn run_shell(state: State<ForgeState>, cmd: ShellCommand) -> TerminalResult {
     }
 
     // Spawn with script for PTY (so interactive programs like sudo work)
-    let escaped = cmd.command.replace('\'', "'\\''");
+    let escaped = command.replace('\'', "'\\''");
     let shell_cmd = format!("script -q -c '{}' /dev/null", escaped);
 
     let mut child = match Command::new("sh")
@@ -184,7 +179,7 @@ fn run_shell(state: State<ForgeState>, cmd: ShellCommand) -> TerminalResult {
 
     TerminalResult {
         success: true,
-        output: format!("$ {}\n", cmd.command),
+        output: format!("$ {}\n", command),
         error: None,
     }
 }

@@ -78,6 +78,7 @@ Forge.runFile = async function(debug) {
   const r = await invoke('run_aether_inline', {path: tab.path, debug: !!debug});
   if (out && r.output) out.textContent = r.output;
   if (r.error) logOutput('Error: '+r.error);
+  Forge._terminalRunning = true;
   this._startPolling();
 };
 
