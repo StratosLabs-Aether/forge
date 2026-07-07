@@ -132,6 +132,7 @@ install_ext() {
   cp -r "${FORGE_REPO}/extensions/${name}/"* "$dest/"
   green "  ✓ ${display}"
 }
+install_ext "aether-file-icons" "Aether File Icons"
 install_ext "aether-language"  "Aether Language Support"
 install_ext "aether-scrible"   "Scrible AI"
 
@@ -152,7 +153,7 @@ cat > "$SETTINGS_FILE" <<'JSONEOF'
 JSONEOF
 green "✓ Settings configured"
 
-# ── Step 5: Create launcher ────────────────────────────────
+# ── Step 5: Create launcher + desktop entry ─────────────────
 echo "→ Creating launcher..."
 mkdir -p "$(dirname "$FORGE_BIN")"
 cat > "$FORGE_BIN" <<LAUNCHEOF
@@ -160,6 +161,21 @@ cat > "$FORGE_BIN" <<LAUNCHEOF
 exec "${CODIUM_BIN}" --user-data-dir "${DATA_DIR}/user-data" --extensions-dir "${DATA_DIR}/extensions" "\$@"
 LAUNCHEOF
 chmod +x "$FORGE_BIN"
+
+# Create .desktop file for dock icon
+DESKTOP_DIR="${HOME}/.local/share/applications"
+mkdir -p "$DESKTOP_DIR"
+cat > "${DESKTOP_DIR}/aether-forge.desktop" <<DESKTOPOF
+[Desktop Entry]
+Name=Aether Forge
+Comment=IDE for the Aether programming language
+Exec=${FORGE_BIN} %F
+Icon=${FORGE_DIR}/share/icons/forge.png
+Terminal=false
+Type=Application
+Categories=Development;IDE;
+StartupWMClass=codium
+DESKTOPOF
 green "✓ Launcher: forge"
 
 # ── Step 6: Done ──────────────────────────────────────────

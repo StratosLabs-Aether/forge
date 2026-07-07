@@ -1,0 +1,17 @@
+{
+  "iconDefinitions": {
+    "_aether_file": { "iconPath": "./aether.svg" },
+    "_aether_env": { "iconPath": "./aether-glo.svg" }
+  },
+  "fileExtensions": {
+    "ath": "_aether_file",
+    "glo": "_aether_env"
+  },
+  "fileNames": {
+    "aether.toml": "_aether_file",
+    "aether.lock": "_aether_file"
+  },
+  "languageIds": {
+    "aether": "_aether_file"
+  }
+}

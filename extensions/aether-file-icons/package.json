@@ -1,0 +1,18 @@
+{
+  "name": "aether-file-icons",
+  "displayName": "Aether File Icons",
+  "description": "Custom icon theme for Aether (.ath, .glo) files",
+  "version": "1.0.0",
+  "publisher": "stratos-labs",
+  "engines": { "vscode": "^1.85.0" },
+  "categories": ["Themes"],
+  "contributes": {
+    "iconThemes": [
+      {
+        "id": "aether-seti-icons",
+        "label": "Aether File Icons",
+        "path": "./aether-icon-theme.json"
+      }
+    ]
+  }
+}
