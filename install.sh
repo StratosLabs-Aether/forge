@@ -94,19 +94,17 @@ if [[ ! -f "${FORGE_DIR}/bin/codium" && ! -f "${FORGE_DIR}/codium" ]]; then
   fi
 
   green "✓ VS Codium downloaded"
+fi
 
-  # ── Replace dock icon with Aether Forge logo ─────────────
-  if [[ -d "${FORGE_REPO}/icons" ]]; then
-    ICON_DIR="${FORGE_REPO}/icons"
-    # Replace codium.png wherever it exists in the extracted files
-    find "${FORGE_DIR}" -name "codium.png" -o -name "code.png" 2>/dev/null | while read -r icon; do
-      cp "${ICON_DIR}/forge-256.png" "$icon" 2>/dev/null || true
-    done
-    # Also place icon for .desktop / dock use
-    mkdir -p "${FORGE_DIR}/share/icons"
-    cp "${ICON_DIR}/forge-256.png" "${FORGE_DIR}/share/icons/forge.png" 2>/dev/null || true
-    green "  ✓ Aether Forge icon installed"
-  fi
+# ── Apply Aether Forge dock icon ──────────────────────────
+if [[ -d "${FORGE_REPO}/icons" ]]; then
+  ICON_DIR="${FORGE_REPO}/icons"
+  find "${FORGE_DIR}" -name "codium.png" -o -name "code.png" 2>/dev/null | while read -r icon; do
+    cp "${ICON_DIR}/forge-256.png" "$icon" 2>/dev/null || true
+  done
+  mkdir -p "${FORGE_DIR}/share/icons"
+  cp "${ICON_DIR}/forge-256.png" "${FORGE_DIR}/share/icons/forge.png" 2>/dev/null || true
+  green "  ✓ Aether Forge icon applied"
 fi
 
 # Find the actual codium binary
