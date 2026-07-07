@@ -19,7 +19,7 @@ rm -rf /tmp/forge-ext 2>/dev/null
 git clone --depth 1 https://github.com/StratosLabs-Aether/forge.git /tmp/forge-ext 2>/dev/null
 
 EXT_DIR="${HOME}/.vscode-oss/extensions"
-[[ -d "${HOME}/.vscode/extensions" ]] && EXT_DIR="${HOME}/.vscode/extensions"
+mkdir -p "$EXT_DIR"
 
 for ext in aether-language aether-file-icons aether-scrible; do
   case "$ext" in
@@ -37,7 +37,6 @@ rm -rf /tmp/forge-ext
 
 # ── Settings ──────────────────────────────────────────────
 DIR="${HOME}/.config/VSCodium/User"
-[[ -d "${HOME}/.config/Code/User" ]] && DIR="${HOME}/.config/Code/User"
 mkdir -p "$DIR"
 
 cat > "${DIR}/settings.json" <<'JSONEOF'
@@ -59,11 +58,9 @@ JSONEOF
 green "✓ Settings"
 
 # ── Desktop entry ─────────────────────────────────────────
-mkdir -p ~/.local/bin ~/.local/share/applications
+mkdir -p ~/.local/bin ~/.local/share/applications ~/.aether-forge/icons
 ln -sf "$(which codium 2>/dev/null || which code)" ~/.local/bin/forge 2>/dev/null
-
 curl -fsSL "https://raw.githubusercontent.com/StratosLabs-Aether/forge/main/icons/forge-256.png" -o ~/.aether-forge/icons/forge.png 2>/dev/null
-mkdir -p ~/.aether-forge/icons
 
 cat > ~/.local/share/applications/aether-forge.desktop <<DESKEOF
 [Desktop Entry]
