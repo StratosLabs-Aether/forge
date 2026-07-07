@@ -23,24 +23,15 @@ use std::fs;
 use std::path::PathBuf;
 use std::process::{Child, Command, Stdio};
 use std::sync::Mutex;
-use std::sync::Arc;
 use tauri::State;
 
 // ═══════════════════════════════════════════════════════════════════
 // State
 // ═══════════════════════════════════════════════════════════════════
 
-struct TerminalState {
-    output: Vec<u8>,
-    stdin: Option<std::process::ChildStdin>,
-    done: bool,
-    exit_code: Option<i32>,
-}
-
 struct ForgeState {
     aether_process: Mutex<Option<Child>>,
     lsp_process: Mutex<Option<Child>>,
-    terminal: Arc<Mutex<TerminalState>>,
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -186,303 +177,52 @@ fn list_dir(path: String) -> FileResult {
 
 // ── Aether Runtime ─────────────────────────────────────────────────
 
-/// Find the aether binary — checks PATH, ~/.local/bin, common install locations
-fn find_aether() -> Option<String> {
-    // Check PATH first
-    if which::which("aether").is_ok() {
-        return Some("aether".to_string());
-    }
-    // Check common install locations
-    let candidates = [
-        format!("{}/.local/bin/aether", std::env::var("HOME").unwrap_or_default()),
-        "/usr/local/bin/aether".to_string(),
-        "/usr/bin/aether".to_string(),
-    ];
-    for path in &candidates {
-        if std::path::Path::new(path).exists() {
-            return Some(path.clone());
-        }
-    }
-    None
-}
-
-/// Find ollama binary
-fn find_ollama() -> Option<String> {
-    if which::which("ollama").is_ok() {
-        return Some("ollama".to_string());
-    }
-    let candidates = [
-        "/usr/local/bin/ollama".to_string(),
-        "/usr/bin/ollama".to_string(),
-    ];
-    for path in &candidates {
-        if std::path::Path::new(path).exists() {
-            return Some(path.clone());
-        }
-    }
-    None
-}
-
-#[derive(Debug, Serialize)]
-struct SetupStatus {
-    aether_installed: bool,
-    aether_path: Option<String>,
-    ollama_installed: bool,
-    ollama_running: bool,
-    model_available: bool,
-    model_name: String,
-    all_ready: bool,
-}
-
-#[tauri::command]
-fn check_setup(model_name: String) -> SetupStatus {
-    let aether = find_aether();
-    let ollama = find_ollama();
-    let ollama_running = std::process::Command::new("ollama")
-        .arg("list")
-        .output()
-        .map(|o| o.status.success())
-        .unwrap_or(false);
-    let model_available = if ollama_running {
-        std::process::Command::new("ollama")
-            .args(["list"])
-            .output()
-            .map(|o| {
-                String::from_utf8_lossy(&o.stdout)
-                    .contains(&model_name)
-            })
-            .unwrap_or(false)
-    } else {
-        false
-    };
-
-    let has_aether = aether.is_some();
-
-    SetupStatus {
-        aether_installed: has_aether,
-        aether_path: aether,
-        ollama_installed: ollama.is_some(),
-        ollama_running,
-        model_available,
-        model_name,
-        all_ready: has_aether && ollama_running && model_available,
-    }
-}
-
 #[tauri::command]
 fn run_aether(path: String, debug: bool, state: State<ForgeState>) -> FileResult {
     if let Ok(mut proc) = state.aether_process.lock() {
         if let Some(ref mut child) = *proc { let _ = child.kill(); }
     }
+    // Detect available terminal emulator
+    let terminals = [
+        ("ghostty",       &["-e"][..]),
+        ("kitty",         &["--"][..]),
+        ("alacritty",     &["-e"][..]),
+        ("konsole",       &["-e"][..]),
+        ("xfce4-terminal",&["-e"][..]),
+        ("gnome-terminal",&["--"][..]),
+        ("xterm",         &["-e"][..]),
+        ("foot",          &["--"][..]),
+        ("lxterminal",    &["-e"][..]),
+    ];
+    let term = std::env::var("TERMINAL").ok()
+        .or_else(|| terminals.iter().find(|(name,_)| which::which(name).is_ok()).map(|(n,_)| n.to_string()))
+        .unwrap_or_else(|| "xterm".into());
 
-    let aether_bin = match find_aether() {
-        Some(p) => p,
-        None => return FileResult {
-            success: false, content: None, entries: None,
-            error: Some("Aether is not installed.\n\nInstall it:\n  curl -fsSL https://raw.githubusercontent.com/StratosLabs-Aether/source/main/aether-native/install.sh | bash".to_string()),
-        },
-    };
+    let (cmd_name, extra_args) = terminals.iter()
+        .find(|(name,_)| name == &term.as_str())
+        .map(|(_,args)| (term.as_str(), *args))
+        .unwrap_or_else(|| ("xterm", &["-e"][..]));
 
-    let mut cmd = std::process::Command::new(&aether_bin);
-    if debug { cmd.arg("--debug"); }
-    cmd.arg(&path);
-    cmd.stdout(std::process::Stdio::piped());
-    cmd.stderr(std::process::Stdio::piped());
-    cmd.stdin(std::process::Stdio::piped());
+    // Wrap in sh -c so &&, echo, read work with every terminal emulator
+    let shell_cmd = format!(
+        "aether {} && echo && echo '── Press Enter to close ──' && read",
+        if debug { format!("--debug \"{}\"", path) } else { format!("\"{}\"", path) }
+    );
 
-    let mut child = match cmd.spawn() {
-        Ok(c) => c,
-        Err(e) => return FileResult {
-            success: false, content: None, entries: None,
-            error: Some(format!("Could not run aether: {}. Install it?", e)),
-        },
-    };
+    let mut cmd = std::process::Command::new(cmd_name);
+    cmd.args(extra_args).arg("sh").arg("-c").arg(&shell_cmd);
+    let status = cmd.spawn();
 
-    let stdout = child.stdout.take();
-    let stderr = child.stderr.take();
-    let stdin = child.stdin.take();
-
-    // Store process handle for stop button
-    if let Ok(mut proc) = state.aether_process.lock() {
-        *proc = Some(child);
-    }
-
-    // Reset terminal state and store stdin for ask()
-    let term = state.terminal.clone();
-    {
-        let mut t = term.lock().unwrap();
-        t.output.clear();
-        t.done = false;
-        t.exit_code = None;
-        t.stdin = stdin;
-    }
-
-    // Spawn reader threads — they mark done when pipes close (process exits)
-    use std::io::Read;
-    if let Some(mut out) = stdout {
-        let term = term.clone();
-        std::thread::spawn(move || {
-            let mut buf = [0u8; 4096];
-            loop {
-                match out.read(&mut buf) {
-                    Ok(0) => break,
-                    Ok(n) => {
-                        let mut t = term.lock().unwrap();
-                        t.output.extend_from_slice(&buf[..n]);
-                    }
-                    Err(_) => break,
-                }
-            }
-            let mut t = term.lock().unwrap();
-            t.done = true;
-            t.stdin = None; // close stdin
-        });
-    }
-    if let Some(mut err) = stderr {
-        let term = term.clone();
-        std::thread::spawn(move || {
-            let mut buf = [0u8; 4096];
-            loop {
-                match err.read(&mut buf) {
-                    Ok(0) => break,
-                    Ok(n) => {
-                        let mut t = term.lock().unwrap();
-                        t.output.extend_from_slice(&buf[..n]);
-                    }
-                    Err(_) => break,
-                }
-            }
-        });
-    }
-
-    FileResult {
-        success: true,
-        content: Some("started".to_string()),
-        entries: None,
-        error: None,
-    }
-}
-
-#[tauri::command]
-fn terminal_read(state: State<ForgeState>) -> FileResult {
-    let term = state.terminal.lock().unwrap();
-    let text = String::from_utf8_lossy(&term.output).to_string();
-    let done = term.done;
-    let exit_code = term.exit_code;
-    drop(term);
-
-    // If done, try to get exit code from process handle
-    let exit = if done {
-        if let Ok(mut proc) = state.aether_process.lock() {
-            if let Some(ref mut child) = *proc {
-                match child.try_wait() {
-                    Ok(Some(status)) => {
-                        let code = status.code();
-                        // Update terminal state
-                        let mut t = state.terminal.lock().unwrap();
-                        t.exit_code = code;
-                        code
-                    }
-                    _ => exit_code,
-                }
-            } else { exit_code }
-        } else { exit_code }
-    } else { None };
-
-    FileResult {
-        success: true,
-        content: Some(text),
-        entries: None,
-        error: if done { exit.map(|c| format!("exit: {}", c)) } else { None },
-    }
-}
-
-#[tauri::command]
-fn terminal_write(text: String, state: State<ForgeState>) -> FileResult {
-    use std::io::Write;
-    let mut term = state.terminal.lock().unwrap();
-    if let Some(ref mut stdin) = term.stdin {
-        let line = format!("{}\n", text);
-        match stdin.write_all(line.as_bytes()) {
-            Ok(_) => FileResult { success: true, content: None, entries: None, error: None },
-            Err(e) => FileResult { success: false, content: None, entries: None, error: Some(e.to_string()) },
+    match status {
+        Ok(child) => {
+            if let Ok(mut proc) = state.aether_process.lock() { *proc = Some(child); }
+            FileResult { success: true, content: Some(format!("Running in {}...", cmd_name).into()), entries: None, error: None }
         }
-    } else {
-        FileResult { success: false, content: None, entries: None, error: Some("No running process".to_string()) }
+        Err(e) => FileResult {
+            success: false, content: None, entries: None,
+            error: Some(format!("Could not open terminal: {}. Install xterm or set TERMINAL env var.", e)),
+        },
     }
-}
-
-#[tauri::command]
-fn terminal_clear(state: State<ForgeState>) -> FileResult {
-    let mut term = state.terminal.lock().unwrap();
-    term.output.clear();
-    FileResult { success: true, content: None, entries: None, error: None }
-}
-
-#[tauri::command]
-fn run_shell(command: String, state: State<ForgeState>) -> FileResult {
-    let term = state.terminal.clone();
-    {
-        let mut t = term.lock().unwrap();
-        t.output.clear(); t.done = false; t.exit_code = None; t.stdin = None;
-    }
-
-    // Wrap in `script` for PTY (enables sudo password prompts)
-    // sed strips sudo's audit-log escape sequences
-    let shell_cmd = if which::which("script").is_ok() {
-        format!("script -q -c '{}' /dev/null 2>&1", command.replace('\'', "'\\''"))
-    } else {
-        command
-    };
-
-    let mut cmd = std::process::Command::new("sh");
-    cmd.arg("-c").arg(&shell_cmd);
-    cmd.stdout(std::process::Stdio::piped());
-    cmd.stderr(std::process::Stdio::piped());
-    cmd.stdin(std::process::Stdio::piped());
-
-    let mut child = match cmd.spawn() {
-        Ok(c) => c,
-        Err(e) => return FileResult { success: false, content: None, entries: None, error: Some(format!("{}", e)) },
-    };
-
-    let stdout = child.stdout.take();
-    let stderr = child.stderr.take();
-    let stdin = child.stdin.take();
-
-    // Store stdin so terminal_write can send input
-    {
-        let mut t = term.lock().unwrap();
-        t.stdin = stdin;
-    }
-
-    // Read stdout/stderr in background
-    if let Some(mut out) = stdout {
-        let term = term.clone();
-        std::thread::spawn(move || {
-            use std::io::Read;
-            let mut buf = [0u8; 4096];
-            loop { match out.read(&mut buf) { Ok(0) => break, Ok(n) => { let mut t = term.lock().unwrap(); t.output.extend_from_slice(&buf[..n]); } Err(_) => break, } }
-        });
-    }
-    if let Some(mut err) = stderr {
-        let term = term.clone();
-        std::thread::spawn(move || {
-            use std::io::Read;
-            let mut buf = [0u8; 4096];
-            loop { match err.read(&mut buf) { Ok(0) => break, Ok(n) => { let mut t = term.lock().unwrap(); t.output.extend_from_slice(&buf[..n]); } Err(_) => break, } }
-        });
-    }
-
-    // Background wait for child
-    let term = term.clone();
-    std::thread::spawn(move || {
-        let status = child.wait();
-        let mut t = term.lock().unwrap();
-        t.done = true; t.exit_code = status.ok().and_then(|s| s.code()); t.stdin = None;
-    });
-
-    FileResult { success: true, content: Some("started".to_string()), entries: None, error: None }
 }
 
 #[tauri::command]
@@ -662,199 +402,104 @@ fn stop_lsp(state: State<ForgeState>) -> FileResult {
     }
 }
 
-// ── Native Folder Dialog ──────────────────────────────────────────
-
-#[tauri::command]
-async fn open_folder_dialog(app: tauri::AppHandle) -> FileResult {
-    use tauri_plugin_dialog::DialogExt;
-    let result = app.dialog()
-        .file()
-        .blocking_pick_folder();
-    match result {
-        Some(path) => FileResult {
-            success: true,
-            content: None,
-            entries: None,
-            error: None,
-        },
-        None => FileResult {
-            success: false,
-            content: None,
-            entries: None,
-            error: Some("No folder selected".to_string()),
-        },
-    }
-}
-
-// ── Scrible Setup (pull model) ────────────────────────────────────
-
-#[tauri::command]
-fn setup_scrible() -> FileResult {
-    // Check if Ollama is installed
-    if which::which("ollama").is_err() {
-        return FileResult {
-            success: false,
-            content: None,
-            entries: None,
-            error: Some("Ollama is not installed. Run: curl -fsSL https://ollama.com/install.sh | sh".to_string()),
-        };
-    }
-    // Pull the Scrible model
-    let output = std::process::Command::new("ollama")
-        .args(["pull", "Scrible"])
-        .output();
-    match output {
-        Ok(out) => {
-            let msg = String::from_utf8_lossy(&out.stdout).to_string();
-            FileResult {
-                success: out.status.success(),
-                content: Some(msg),
-                entries: None,
-                error: if out.status.success() { None } else { Some(String::from_utf8_lossy(&out.stderr).to_string()) },
-            }
-        }
-        Err(e) => FileResult {
-            success: false,
-            content: None,
-            entries: None,
-            error: Some(format!("Failed to pull Scrible model: {}", e)),
-        },
-    }
-}
-
-// ── Update Checker ────────────────────────────────────────────────
-
-#[derive(Debug, Serialize)]
-struct UpdateResult {
-    success: bool,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    current_version: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    latest_version: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    download_url: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    error: Option<String>,
-}
-
-#[tauri::command]
-async fn check_forge_update() -> UpdateResult {
-    let current = env!("CARGO_PKG_VERSION").to_string();
-    let url = "https://api.github.com/repos/StratosLabs-Aether/forge/releases/latest";
-    let client = reqwest::Client::new();
-    match client
-        .get(url)
-        .header("Accept", "application/vnd.github+json")
-        .header("User-Agent", "Aether-Forge")
-        .timeout(std::time::Duration::from_secs(5))
-        .send()
-        .await
-    {
-        Ok(resp) => {
-            if let Ok(json) = resp.json::<serde_json::Value>().await {
-                let latest = json["tag_name"].as_str().unwrap_or("").trim_start_matches('v').to_string();
-                let download_url = json["html_url"].as_str().unwrap_or("").to_string();
-                return UpdateResult {
-                    success: true,
-                    current_version: Some(current),
-                    latest_version: if latest.is_empty() { None } else { Some(latest) },
-                    download_url: if download_url.is_empty() { None } else { Some(download_url) },
-                    error: None,
-                };
-            }
-            UpdateResult {
-                success: false,
-                current_version: Some(current),
-                latest_version: None,
-                download_url: None,
-                error: Some("Failed to parse release data".to_string()),
-            }
-        }
-        Err(e) => UpdateResult {
-            success: false,
-            current_version: Some(current),
-            latest_version: None,
-            download_url: None,
-            error: Some(format!("Update check failed: {}", e)),
-        },
-    }
-}
-
 // ═══════════════════════════════════════════════════════════════════
 // Main
 // ═══════════════════════════════════════════════════════════════════
 
 fn main() {
-    // Fix Wayland/WebKit rendering on Linux
-    std::env::set_var("WEBKIT_DISABLE_COMPOSITING_MODE", "1");
-    std::env::set_var("WEBKIT_DISABLE_DMABUF_RENDERER", "1");
-    std::env::set_var("GDK_BACKEND", "x11");
-
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_fs::init())
-        .plugin(tauri_plugin_dialog::init())
         .setup(|_app| {
             // Auto-start Ollama in the background if not already running
             std::thread::spawn(|| {
-                // Check if ollama is installed
-                if which::which("ollama").is_err() {
-                    eprintln!("[Forge] Ollama not found. Install it: curl -fsSL https://ollama.com/install.sh | sh");
-                    return;
-                }
                 let status = std::process::Command::new("ollama")
                     .arg("serve")
                     .stdout(std::process::Stdio::null())
                     .stderr(std::process::Stdio::null())
                     .spawn();
                 match status {
-                    Ok(_) => {
-                        println!("[Forge] Ollama service started");
-                        // Pull scrible-completor (FIM code completion model)
-                        std::thread::sleep(std::time::Duration::from_secs(2));
-                        let pull = std::process::Command::new("ollama")
-                            .args(["pull", "scrible-completor"])
-                            .stdout(std::process::Stdio::null())
-                            .stderr(std::process::Stdio::null())
-                            .status();
-                        match pull {
-                            Ok(s) if s.success() => println!("[Forge] scrible-completor ready"),
-                            _ => eprintln!("[Forge] Could not pull scrible-completor"),
-                        }
-                    }
+                    Ok(_) => println!("[Forge] Ollama service started"),
                     Err(e) => eprintln!("[Forge] Could not start Ollama: {}. Is it installed?", e),
                 }
             });
+
+            // Auto-create models from HuggingFace if not already installed
+            std::thread::spawn(|| {
+                std::thread::sleep(std::time::Duration::from_secs(3)); // wait for ollama serve
+                let models = vec![
+                    ("scrible-chat", "https://huggingface.co/stratoslabs/scrible-chat/resolve/main/scrible-chat.gguf", "0.2", "<|end|>"),
+                    ("scrible-inline", "https://huggingface.co/stratoslabs/scrible-inline/resolve/main/scrible-inline.gguf", "0.1", "<|endoftext|>"),
+                ];
+                for (name, url, temp, stop) in models {
+                    // Check if model already exists
+                    let list = std::process::Command::new("ollama")
+                        .arg("list")
+                        .output();
+                    if let Ok(out) = list {
+                        let list_str = String::from_utf8_lossy(&out.stdout);
+                        if list_str.contains(name) {
+                            println!("[Forge] Model '{}' already installed", name);
+                            continue;
+                        }
+                    }
+                    // Create model from HF
+                    let modelfile = format!(
+                        "FROM {}\nPARAMETER temperature {}\nPARAMETER stop \"{}\"\n",
+                        url, temp, stop
+                    );
+                    let result = std::process::Command::new("ollama")
+                        .arg("create")
+                        .arg(name)
+                        .arg("-f")
+                        .arg("-")
+                        .stdin(std::process::Stdio::piped())
+                        .stdout(std::process::Stdio::null())
+                        .stderr(std::process::Stdio::piped())
+                        .spawn();
+                    match result {
+                        Ok(mut child) => {
+                            if let Some(stdin) = child.stdin.as_mut() {
+                                use std::io::Write;
+                                let _ = stdin.write_all(modelfile.as_bytes());
+                            }
+                            let output = child.wait_with_output();
+                            match output {
+                                Ok(o) if o.status.success() => {
+                                    println!("[Forge] Model '{}' installed successfully", name);
+                                }
+                                Ok(o) => {
+                                    let stderr = String::from_utf8_lossy(&o.stderr);
+                                    eprintln!("[Forge] Failed to install model '{}': {}", name, stderr.trim());
+                                }
+                                Err(e) => {
+                                    eprintln!("[Forge] Model '{}' install error: {}", name, e);
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            eprintln!("[Forge] Could not run ollama create for '{}': {}", name, e);
+                        }
+                    }
+                }
+            });
+
             Ok(())
         })
         .manage(ForgeState {
             aether_process: Mutex::new(None),
             lsp_process: Mutex::new(None),
-            terminal: Arc::new(Mutex::new(TerminalState {
-                output: Vec::new(),
-                stdin: None,
-                done: true,
-                exit_code: None,
-            })),
         })
         .invoke_handler(tauri::generate_handler![
             read_file,
             write_file,
             list_dir,
             run_aether,
-            terminal_read,
-            terminal_write,
-            terminal_clear,
-            run_shell,
             stop_execution,
             scrible_complete,
             scrible_chat,
             start_lsp,
             stop_lsp,
-            open_folder_dialog,
-            check_setup,
-            check_forge_update,
-            setup_scrible,
         ])
         .run(tauri::generate_context!())
         .expect("Failed to launch Aether Forge");

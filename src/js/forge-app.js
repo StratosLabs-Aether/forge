@@ -2,15 +2,7 @@
 
 const Forge = {
   tabs: [], activeTabId: null, folderPath: null,
-  // scrible-completor: FIM-trained Phi-3 for inline code completion (569 ex, 5 epochs)
-  // scrible-chatcoder: chat + multi-line generation (train with larger base)
-  config: {
-    completorModel: 'scrible-completor',
-    chatModel: 'scrible-chatcoder',
-    endpoint:'http://localhost:11434',
-    temperature:0.2,
-    maxTokens:512
-  },
+  config: { model:'scrible-chat', inlineModel:'scrible-inline', endpoint:'http://localhost:11434', temperature:0.2, maxTokens:512 },
   isWaiting: false,
 };
 
@@ -62,72 +54,6 @@ Forge.save = async function() {
   return tab;
 };
 
-// ── Inline Autocomplete (scrible-completor FIM) ──────────
-Forge.autocompleteTimer = null;
-Forge.completionGhost = '';
-
-Forge.triggerAutocomplete = function() {
-  clearTimeout(this.autocompleteTimer);
-  this.autocompleteTimer = setTimeout(async function() {
-    var ta = document.getElementById('editor-textarea');
-    if (!ta || ta.style.display === 'none') return;
-    var code = ta.value;
-    if (!code || code.length < 3) return;
-    var cursorPos = ta.selectionStart;
-    // Get code up to cursor as the FIM prefix
-    var prefix = code.substring(0, cursorPos);
-    if (!prefix.trim()) return;
-
-    try {
-      var r = await invoke('scrible_complete', {query:{
-        endpoint: Forge.config.endpoint,
-        model: Forge.config.completorModel,
-        prompt: prefix,
-        temperature: 0.1,
-        max_tokens: 64
-      }});
-      if (r && r.success && r.response) {
-        Forge.completionGhost = r.response.trim();
-        Forge.showGhost();
-      }
-    } catch(e) {}
-  }, 400);
-};
-
-Forge.showGhost = function() {
-  var ta = document.getElementById('editor-textarea');
-  var overlay = document.getElementById('ghost-overlay');
-  if (!ta || !Forge.completionGhost) {
-    if (overlay) overlay.textContent = '';
-    return;
-  }
-  if (!overlay) {
-    overlay = document.createElement('div');
-    overlay.id = 'ghost-overlay';
-    overlay.style.cssText = 'position:absolute;pointer-events:none;color:#555;font:inherit;white-space:pre-wrap;overflow:hidden;z-index:0';
-    ta.parentNode.style.position = 'relative';
-    ta.parentNode.insertBefore(overlay, ta.nextSibling);
-  }
-  // Show ghost text after cursor
-  var before = ta.value.substring(0, ta.selectionStart);
-  overlay.textContent = before + Forge.completionGhost;
-  overlay.style.cssText += ';top:0;left:0;right:0;bottom:0;padding:inherit';
-};
-
-Forge.acceptCompletion = function() {
-  if (!this.completionGhost) return false;
-  var ta = document.getElementById('editor-textarea');
-  if (!ta) return false;
-  var cursorPos = ta.selectionStart;
-  ta.value = ta.value.substring(0, cursorPos) + this.completionGhost + ta.value.substring(cursorPos);
-  ta.selectionStart = ta.selectionEnd = cursorPos + this.completionGhost.length;
-  this.completionGhost = '';
-  this.showGhost();
-  var tab = this.tabs.find(t=>t.id===this.activeTabId);
-  if (tab) { tab.content = ta.value; tab.isDirty = true; this.renderTabs(); }
-  return true;
-};
-
 // ── Run file ──────────────────────────────────────────────
 Forge.runFile = async function(debug) {
   let tab = this.tabs.find(t=>t.id===this.activeTabId);
@@ -141,73 +67,9 @@ Forge.runFile = async function(debug) {
     await invoke('write_file',{path:tab.path,content:tab.content});
   }
   this.renderTabs(); this._updateStatus();
-  // Clear terminal and switch to it
-  var termLines = document.getElementById('terminal-lines');
-  if (termLines) termLines.innerHTML = '';
-  switchPanel('terminal');
-  logTerminal('⚡ Running: '+tab.name+'\n');
-  var result = await invoke('run_aether',{path:tab.path,debug:!!debug});
-  if (result && result.error) {
-    logTerminal('❌ ' + result.error + '\n');
-    return;
-  }
-  // Start polling for output
-  Forge._pollTerminal();
-};
-
-Forge._pollTimer = null;
-Forge._lastOutput = '';
-
-Forge._pollTerminal = function() {
-  clearInterval(this._pollTimer);
-  this._pollTimer = setInterval(async function() {
-    var r = await invoke('terminal_read', {});
-    if (!r || !r.success) return;
-    var text = r.content || '';
-    // Only show new content
-    if (text !== Forge._lastOutput) {
-      var newText = text.substring(Forge._lastOutput.length);
-      Forge._lastOutput = text;
-      if (newText) {
-        var termLines = document.getElementById('terminal-lines');
-        if (termLines) {
-          termLines.querySelector('.output-placeholder')?.remove();
-          var s = document.createElement('span');
-          s.textContent = newText;
-          termLines.appendChild(s);
-          termLines.scrollTop = termLines.scrollHeight;
-        }
-      }
-    }
-    // Check if process ended
-    if (r.error) {
-      clearInterval(Forge._pollTimer);
-      Forge._pollTimer = null;
-      logTerminal('\n── Process ended (' + r.error + ') ──\n');
-    }
-  }, 200);
-};
-
-Forge.sendTerminalInput = async function() {
-  var input = document.getElementById('terminal-input');
-  if (!input) return;
-  var text = input.value;
-  input.value = '';
-
-  // If aether/shell process is running, send silently to stdin (passwords!)
-  if (Forge._pollTimer) {
-    invoke('terminal_write', {text: text});
-    return;
-  }
-
-  // No process running — show command in terminal and execute
-  logTerminal('$ ' + text + '\n');
-  var r = await invoke('run_shell', {command: text});
-  if (r && r.error) {
-    logTerminal('❌ ' + r.error + '\n');
-    return;
-  }
-  Forge._pollTerminal();
+  clearOutput(); logOutput('Launched in terminal: '+tab.name+'\n');
+  switchPanel('output');
+  await invoke('run_aether',{path:tab.path,debug:!!debug});
 };
 
 Forge.toggleScrible = function() {
@@ -419,70 +281,10 @@ async function loadDir(dirPath, parentEl) {
   }));
 }
 
-// ── Update Checker ────────────────────────────────────────
-Forge.CURRENT_VERSION = '2.1.0';
-
-async function checkForUpdates(silent) {
-  try {
-    var resp = await fetch('https://api.github.com/repos/StratosLabs-Aether/forge/releases/latest', {
-      headers: { 'Accept': 'application/vnd.github+json' }
-    });
-    if (!resp.ok) return;
-    var release = await resp.json();
-    var latest = (release.tag_name || '').replace(/^v/, '');
-    var current = Forge.CURRENT_VERSION.replace(/^v/, '');
-    if (latest && latest !== current) {
-      var msg = 'Aether Forge v' + latest + ' is available! You have v' + current + '.\n\nDownload from: ' + release.html_url;
-      if (!silent) alert(msg);
-      // Update status bar
-      var statusEl = document.getElementById('status-update');
-      if (statusEl) {
-        statusEl.textContent = '⬆ Update v' + latest + ' available';
-        statusEl.style.color = '#e5c07b';
-        statusEl.style.cursor = 'pointer';
-        statusEl.title = msg;
-        statusEl.onclick = function() { window.open(release.html_url, '_blank'); };
-      }
-      return { updateAvailable: true, version: latest, url: release.html_url };
-    }
-  } catch(e) {
-    if (!silent) console.log('Update check failed:', e);
-  }
-  return { updateAvailable: false };
-}
-
-// ── Open Folder (native file dialog) ────────────────────
-async function openFolderDialog() {
-  try {
-    // Try Tauri 2 dialog plugin (available via __TAURI__)
-    var tauriApi = window.__TAURI__;
-    if (tauriApi && tauriApi.dialog && tauriApi.dialog.open) {
-      var selected = await tauriApi.dialog.open({
-        directory: true,
-        multiple: false,
-        title: 'Open Aether Project Folder'
-      });
-      if (selected && typeof selected === 'string') {
-        loadDir(selected);
-      } else if (selected && Array.isArray(selected) && selected.length > 0) {
-        loadDir(selected[0]);
-      }
-      return;
-    }
-    // Tauri v1 fallback
-    if (tauriApi && tauriApi.invoke) {
-      var result = await tauriApi.invoke('open_folder_dialog');
-      if (result && result.success && result.path) {
-        loadDir(result.path);
-        return;
-      }
-    }
-  } catch(e) {
-    console.warn('[Forge] Native dialog failed, using fallback:', e);
-  }
-  // Browser/fallback: prompt for absolute path
-  var absPath = prompt('Open folder (enter absolute path):', Forge.folderPath || '/home');
-  if (absPath && absPath.trim()) loadDir(absPath.trim());
+// ── Open Folder ──────────────────────────────────────────
+function openFolderDialog() {
+  const absPath = prompt('Open folder (enter absolute path):', Forge.folderPath||'/run/media/raf/Z/Aether.ath');
+  if(absPath && absPath.trim()) loadDir(absPath.trim());
 }
 
 // ── Scrible Chat ──────────────────────────────────────────
@@ -544,25 +346,13 @@ async function scribleSend(text) {
   const ctxBlock = fileContent ? '\n\nThe user has this file open in the editor:\n```aether\n'+fileContent+'\n```' : '';
   try {
     const r = await invoke('scrible_chat', {query:{
-      endpoint:Forge.config.endpoint, model:Forge.config.chatModel,
+      endpoint:Forge.config.endpoint, model:Forge.config.model,
       messages:[
         {role:'system', content:SCRIBLE_SYSTEM_PROMPT},
         {role:'user', content:text+fileInfo+projCtx+ctxBlock}
       ], temperature:Forge.config.temperature, max_tokens:Forge.config.maxTokens
     }});
-    var response;
-    if (r && r.success && r.response) {
-      response = r.response;
-    } else if (r && r.error) {
-      var errMsg = r.error;
-      if (errMsg.indexOf('Ollama unreachable') >= 0 || errMsg.indexOf('Connection refused') >= 0) {
-        response = '**Scrible AI is not available on this PC.**\n\nTo enable AI features:\n\n```bash\n# 1. Install Ollama\ncurl -fsSL https://ollama.com/install.sh | sh\n\n# 2. Pull the models\nollama pull scrible-completor\nollama pull scrible-chatcoder\n```\n\nThen restart Aether Forge.\n\nThe editor, file manager, and run/debug work without AI.';
-      } else {
-        response = '**Error:** ' + esc(errMsg);
-      }
-    } else {
-      response = '_(No response. Is Ollama running? Run: ollama pull Scrible)_';
-    }
+    const response = (r&&r.success&&r.response)?r.response:(r&&r.error)?'**Error:** '+esc(r.error):'_(No response. Is Ollama running?)_';
     addBubble('bot', response);
     // Check for file-write directives and auto-apply
     autoApplyWrites(response);
@@ -669,9 +459,7 @@ function showTyping(s){const e=document.getElementById('scrible-typing');if(e)e.
 
 // ── Output ────────────────────────────────────────────────
 function logOutput(text){const t=document.getElementById('output-lines');if(!t)return;t.querySelector('.output-placeholder')?.remove();const s=document.createElement('span');s.textContent=text;t.appendChild(s);t.scrollTop=t.scrollHeight;}
-function logTerminal(text){const t=document.getElementById('terminal-lines');if(!t)return;t.querySelector('.output-placeholder')?.remove();const s=document.createElement('span');s.textContent=text;t.appendChild(s);t.scrollTop=t.scrollHeight;}
 function clearOutput(){const t=document.getElementById('output-lines');if(t)t.innerHTML='';}
-function clearTerminal(){const t=document.getElementById('terminal-lines');if(t)t.innerHTML='';}
 function switchPanel(name){document.querySelectorAll('#panel-tabs .panel-tab').forEach(b=>b.classList.remove('active'));document.querySelectorAll('.panel-content').forEach(p=>p.classList.remove('active'));const tab=document.querySelector('#panel-tabs .panel-tab[data-panel="'+name+'"]'),content=document.getElementById('panel-'+name);if(tab)tab.classList.add('active');if(content)content.classList.add('active');}
 
 // ── Init ──────────────────────────────────────────────────
@@ -700,8 +488,8 @@ document.addEventListener('DOMContentLoaded',()=>{
 
   // Editor
   const ta=document.getElementById('editor-textarea');
-  ta?.addEventListener('input',()=>{const tab=Forge.tabs.find(t=>t.id===Forge.activeTabId);if(tab){tab.isDirty=true;tab.content=ta.value;Forge.renderTabs();Forge._updateStatus();} Forge.triggerAutocomplete();});
-  ta?.addEventListener('keydown',e=>{if(e.key==='Tab'){e.preventDefault();if(!Forge.acceptCompletion()){const s=ta.selectionStart;ta.value=ta.value.slice(0,s)+'    '+ta.value.slice(ta.selectionEnd);ta.selectionStart=ta.selectionEnd=s+4;}}});
+  ta?.addEventListener('input',()=>{const tab=Forge.tabs.find(t=>t.id===Forge.activeTabId);if(tab){tab.isDirty=true;tab.content=ta.value;Forge.renderTabs();Forge._updateStatus();}});
+  ta?.addEventListener('keydown',e=>{if(e.key==='Tab'){e.preventDefault();const s=ta.selectionStart;ta.value=ta.value.slice(0,s)+'    '+ta.value.slice(ta.selectionEnd);ta.selectionStart=ta.selectionEnd=s+4;}});
   const uc=()=>{const p=document.getElementById('status-cursor');if(p&&ta){const lines=ta.value.substr(0,ta.selectionStart).split('\n');p.textContent='Ln '+lines.length+', Col '+(lines[lines.length-1].length+1);}};
   ta?.addEventListener('click',uc); ta?.addEventListener('keyup',uc);
 
@@ -716,57 +504,18 @@ document.addEventListener('DOMContentLoaded',()=>{
   document.getElementById('btn-clear-chat')?.addEventListener('click',clearScribleChat);
   ta?.addEventListener('input',updateSmartPrompts);
   ta?.addEventListener('mouseup',updateSmartPrompts);
-  document.getElementById('scrible-model')?.addEventListener('change',function(){
-    Forge.config.chatModel=this.value;
-    document.getElementById('status-model').textContent=this.value;
-    try{localStorage.setItem('forge-config',JSON.stringify(Forge.config));}catch(e){}
-  });
+  document.getElementById('scrible-model')?.addEventListener('change',function(){Forge.config.model=this.value;document.getElementById('status-model').textContent=this.value;try{localStorage.setItem('forge-config',JSON.stringify(Forge.config));}catch(e){}});
   updateSmartPrompts();
 
   // Config
-  try{var s=JSON.parse(localStorage.getItem('forge-config')||'{}');Object.assign(Forge.config,s);var sm=document.getElementById('scrible-model');if(sm)sm.value=Forge.config.chatModel;document.getElementById('status-model').textContent=Forge.config.chatModel;}catch(e){}
+  try{const s=JSON.parse(localStorage.getItem('forge-config')||'{}');Object.assign(Forge.config,s);const sm=document.getElementById('scrible-model');if(sm)sm.value=Forge.config.model;document.getElementById('status-model').textContent=Forge.config.model;}catch(e){}
 
-  // Terminal input
-  var ti = document.getElementById('terminal-input');
-  ti?.addEventListener('keydown', function(e) {
-    if (e.key === 'Enter') { e.preventDefault(); Forge.sendTerminalInput(); }
-  });
+  // Keyboard
   document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key==='s'){e.preventDefault();Forge.save();}});
   document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key==='b'){e.preventDefault();document.getElementById('sidebar-left').classList.toggle('collapsed');}});
   document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key==='j'){e.preventDefault();Forge.toggleScrible();}});
-  document.getElementById('act-settings')?.addEventListener('click',()=>alert('Aether Forge v2.1.0\nStratos Labs\n\nDual-model AI:\n  ✏️ scrible-completor — FIM code completion\n  💬 scrible-chatcoder — Chat + code generation\n\nhttps://github.com/StratosLabs-Aether/forge'));
-  // Run setup check on startup — non-blocking, just shows status
-  setTimeout(async function() {
-    var setup = await invoke('check_setup', {modelName: Forge.config.completorModel});
-    var msgs = [];
-    if (setup.aether_installed) {
-      msgs.push('✅ Aether: ' + (setup.aether_path||'found'));
-    } else {
-      msgs.push('❌ Aether not installed. Get it: https://github.com/StratosLabs-Aether/source');
-    }
-    if (!setup.ollama_installed) {
-      msgs.push('⚠️  Ollama not installed — AI features disabled. Install: curl -fsSL https://ollama.com/install.sh | sh');
-    } else if (!setup.ollama_running) {
-      msgs.push('⚠️  Ollama not running — start with: ollama serve');
-    } else if (!setup.model_available) {
-      msgs.push('⚠️  Model not pulled. Run: ollama pull ' + Forge.config.completorModel);
-    } else {
-      msgs.push('✅ AI ready: ' + Forge.config.completorModel);
-    }
-    msgs.push('── Forge ready ──');
-    logOutput(msgs.join('\n'));
-  }, 1500);
-  console.log('Aether Forge v2.0.0 ready.');
-
-  // Listen for real-time terminal output from Rust backend
-  if (window.__TAURI__) {
-    window.__TAURI__.event.listen('terminal-line', function(event) {
-      logTerminal(event.payload + '\n');
-    });
-  }
-
-  // Check for updates (silent on startup)
-  setTimeout(function() { checkForUpdates(true); }, 3000);
+  document.getElementById('act-settings')?.addEventListener('click',()=>alert('Aether Forge v1.0\nStratos Labs\nTauri 2.0 + Rust + Llama 3.1 8B'));
+  console.log('Aether Forge ready.');
   // Ensure right sidebar visible
   document.getElementById('sidebar-right')?.classList.remove('collapsed');
 });

@@ -1,55 +1,73 @@
 # ⚒ Aether Forge IDE
 
-**Aether Forge** is the official native desktop IDE for the [Aether](https://github.com/StratosLabs-Aether/source) programming language. Built with **Tauri 2.0 + Rust**, featuring a custom dark theme and the **Scrible AI agent** — powered by Ollama.
+**Aether Forge** is the official native desktop IDE for the [Aether](https://github.com/stratos-labs/aether) programming language. Built with **Tauri 2.0 + Rust** for maximum performance, featuring a custom dark theme and the **Scrible AI agent** preinstalled — powered by **StarCoder2-3B**, heavily modified and trained for coding in Aether.
 
-## Install
+> **Architecture**: Tauri 2.0 (Rust backend) + CodeMirror 6 (editor) + Tree-sitter (syntax) + Tower-LSP (intelligence)
 
-### 📦 Pre-built packages (coming soon)
-Once CI builds are published, these will work:
-
-| Platform | Command |
-|----------|---------|
-| Linux (any) | `curl -fsSL https://raw.githubusercontent.com/StratosLabs-Aether/forge/main/install.sh \| bash` |
-| Debian/Ubuntu | `sudo apt install aether-forge` |
-| Fedora/RHEL | `sudo dnf install aether-forge` |
-| Arch Linux | `yay -S aether-forge` |
-
-### 🛠️ Build from source (works today)
-
-```bash
-# 1. Install system dependencies
-#    Debian/Ubuntu:
-sudo apt install pkg-config libglib2.0-dev libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev libfuse2
-#    Fedora:
-sudo dnf install pkg-config glib2-devel webkit2gtk4.1-devel gtk3-devel libappindicator-gtk3-devel
-#    Arch:
-sudo pacman -S pkg-config glib2 webkit2gtk-6.0 gtk3 libappindicator-gtk3
-
-# 2. Install Rust
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-
-# 3. Clone and build
-git clone https://github.com/StratosLabs-Aether/forge
-cd forge/src-tauri
-cargo build --release
-# → binary at target/release/aether-forge
 ```
-
-### 🧪 Development mode
-
-```bash
-cargo tauri dev       # hot-reload, devtools enabled
+┌──────────────────────────────────────────────────────────────┐
+│  ⚒ Aether Forge                              🤖 Scrible  ●  │  ← TOOLBAR
+├──────────────────────────────────────────────────────────────┤
+│  📄 Untitled.ath  │  🧪 main.ath  │  +                       │  ← TABS
+├──────────┬────────────────────────┬──────────────────────────┤
+│  📁 FILES│                        │  🤖 AI Coding Agent      │
+│          │                        │     (Scrible)            │
+│  📁 src/ │   Active File          │                          │
+│  🧪 main │   (Text Editor)        │  ┌────────────────────┐  │
+│  📄 READ │                        │  │ scrible-chat      │  │
+│  📁 tests│   Monaco Editor        │  │ User can use our   │  │
+│  🧪 smoke│   with Aether syntax   │  │ preinstalled model │  │
+│          │   highlighting         │  │ or Ollama model    │  │
+│          │                        │  └────────────────────┘  │
+│          │                        │  [Chat messages here]    │
+│          │                        │  [Ask Scrible...]  [➤]  │
+├──────────┴────────────────────────┴──────────────────────────┤
+│  📟 Output — Aether Forge ready.          ⚡ StarCoder2-3B Q4 │  ← STATUS CENTER
+└──────────────────────────────────────────────────────────────┘
 ```
 
 ## Features
 
-- **Native desktop app** — Tauri 2.0 + Rust, ~15MB binary, no Electron bloat
-- **Dark theme** — Custom Catppuccin-inspired palette
-- **Scrible AI** — Ollama-powered coding agent. Auto-pulls `Scrible` model on first launch
-- **File explorer** — Tree view with directory expansion, native folder picker
-- **Tab system** — Multi-file editing with dirty-state indicators
-- **Run & debug** — Execute Aether scripts in an integrated terminal
-- **Auto-update** — Checks GitHub Releases and notifies when a new version is available
+- **Beautiful Dark Theme** — Custom Catppuccin-inspired palette, sleek and modern
+- **Monaco Editor** — Same editor that powers VS Code, with full Aether syntax highlighting
+- **Scrible AI Agent** — StarCoder2-3B fine-tuned for Aether, with:
+  - **Inline code completions** (Fill-In-the-Middle)
+  - **Chat interface** for code generation, explanation, and fixes
+  - **Preinstalled pretrained model** + any Ollama model support
+- **File Explorer** — Tree view with directory expansion
+- **Tab System** — Multi-file editing with dirty-state indicators
+- **Integrated Terminal** — Run, debug, and test Aether code directly
+- **Status Center** — Real-time output, model status, and cursor position
+
+## Quick Start
+
+### Prerequisites
+
+- **Node.js** >= 18
+- **npm** >= 9
+- **Rust** >= 1.75 (for the Tauri backend)
+- **Node.js** >= 18 (for Tree-sitter CLI only)
+- **Aether CLI** installed and in PATH
+- **Ollama** (for Scrible AI — optional but recommended)
+
+### Install & Run
+
+```bash
+cd Aether-Forge-IDE
+
+# Install Tauri CLI
+cargo install tauri-cli --version "^2"
+
+# Run in development mode
+cargo tauri dev
+```
+
+### Build Standalone Packages
+
+```bash
+cargo tauri build           # Native binary for current OS
+cargo tauri build --target x86_64-unknown-linux-gnu
+```
 
 ## Architecture
 
