@@ -4,74 +4,68 @@ green() { printf '\033[32m%s\033[0m\n' "$1"; }
 bold()  { printf '\033[1m%s\033[0m' "$1"; }
 
 FORGE_DIR="${HOME}/.aether-forge"
-DATA="${FORGE_DIR}/data"
-EXT="${DATA}/extensions"
-SETTINGS="${DATA}/user-data/User"
 
 echo ""
 bold "⚒  Aether Forge Installer"
 
-# ── Download VS Codium ────────────────────────────────────
-if [[ ! -f "${FORGE_DIR}/bin/codium" && ! -f "${FORGE_DIR}/codium" ]]; then
-  echo "→ Downloading VS Codium..."
-  case "$(uname -m)" in
-    x86_64) URL="https://github.com/VSCodium/vscodium/releases/download/1.96.0.24347/VSCodium-linux-x64-1.96.0.24347.tar.gz" ;;
-    aarch64) URL="https://github.com/VSCodium/vscodium/releases/download/1.96.0.24347/VSCodium-linux-arm64-1.96.0.24347.tar.gz" ;;
-    *) echo "Unsupported arch"; exit 1 ;;
-  esac
-  mkdir -p "$FORGE_DIR"
-  curl -fsSL -o /tmp/forge-vsc.tar.gz "$URL"
-  tar -xzf /tmp/forge-vsc.tar.gz -C "$FORGE_DIR"
-  rm -f /tmp/forge-vsc.tar.gz
+# ── Install system VS Codium ──────────────────────────────
+if ! command -v codium &>/dev/null; then
+  echo "→ Installing VS Codium..."
+  wget -qO - https://gitlab.com/paulcarroty/vscodium-deb-rpm-repo/raw/master/pub.gpg 2>/dev/null | gpg --dearmor 2>/dev/null | sudo dd of=/usr/share/keyrings/vscodium-archive-keyring.gpg 2>/dev/null
+  echo 'deb [signed-by=/usr/share/keyrings/vscodium-archive-keyring.gpg] https://download.vscodium.com/debs vscodium main' | sudo tee /etc/apt/sources.list.d/vscodium.list >/dev/null
+  sudo apt update -qq && sudo apt install -y codium 2>&1 | tail -1
 fi
-
-# Find codium binary
-CODIUM=""
-for c in "${FORGE_DIR}/bin/codium" "${FORGE_DIR}/codium"; do
-  [[ -f "$c" ]] && { CODIUM="$c"; break; }
-done
-CODIUM="${CODIUM:-$(find "${FORGE_DIR}" -name codium -type f -not -path '*/resources/*' 2>/dev/null | head -1)}"
-[[ -z "$CODIUM" ]] && { echo "codium not found"; exit 1; }
 green "✓ VS Codium"
 
-# ── Clone forge repo ──────────────────────────────────────
-FORGE_REPO="${FORGE_DIR}/forge-repo"
-rm -rf "$FORGE_REPO" 2>/dev/null
-echo "→ Fetching extensions..."
-git clone --depth 1 https://github.com/StratosLabs-Aether/forge.git "$FORGE_REPO" 2>/dev/null || { echo "Clone failed"; exit 1; }
+# ── Install extensions (standard location) ────────────────
+echo "→ Installing extensions..."
+rm -rf /tmp/forge-ext 2>/dev/null
+git clone --depth 1 https://github.com/StratosLabs-Aether/forge.git /tmp/forge-ext 2>/dev/null
 
-# ── Install extensions ────────────────────────────────────
-mkdir -p "$EXT" "$SETTINGS"
+EXT_DIR="${HOME}/.vscode-oss/extensions"
+mkdir -p "$EXT_DIR"
 
-copy_ext() {
-  local src="$1" id="$2"
-  local dst="${EXT}/${id}"
+for ext in aether-language aether-file-icons aether-scrible; do
+  case "$ext" in
+    aether-language) id="stratos-labs.aether-support" ;;
+    aether-file-icons) id="stratos-labs.aether-file-icons" ;;
+    aether-scrible) id="stratos-labs.aether-scrible" ;;
+  esac
+  dst="${EXT_DIR}/${id}"
   rm -rf "$dst" 2>/dev/null
   mkdir -p "$dst"
-  cp -r "${FORGE_REPO}/extensions/${src}/"* "$dst/"
+  cp -r /tmp/forge-ext/extensions/${ext}/* "$dst/"
   green "  ✓ ${id}"
-}
+done
 
-copy_ext "aether-language"   "stratos-labs.aether-support"
-copy_ext "aether-file-icons" "stratos-labs.aether-file-icons"
-copy_ext "aether-scrible"    "stratos-labs.aether-scrible"
+# Fix icons to small SVGs
+cat > "${EXT_DIR}/stratos-labs.aether-file-icons/aether.svg" << 'EOF'
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><polygon points="8,1 15,15 1,15" fill="#c084fc" stroke="#8a4fcc" stroke-width="1"/></svg>
+EOF
+cat > "${EXT_DIR}/stratos-labs.aether-file-icons/aether-glo.svg" << 'EOF'
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6" fill="#f0c060" stroke="#c09030" stroke-width="1"/><circle cx="8" cy="8" r="2" fill="#0d0d1a"/></svg>
+EOF
 
-# CRITICAL: Delete cache so VS Codium re-scans extensions
-rm -f "${EXT}/extensions.json" "${EXT}/.obsolete" 2>/dev/null || true
+rm -rf /tmp/forge-ext
 
-# ── Settings ──────────────────────────────────────────────
-cat > "${SETTINGS}/settings.json" <<'JSONEOF'
+# ── Forge-specific settings (isolated user-data) ──────────
+FORGE_DATA="${FORGE_DIR}/user-data"
+rm -rf "$FORGE_DATA" 2>/dev/null
+mkdir -p "${FORGE_DATA}/User"
+
+cat > "${FORGE_DATA}/User/settings.json" <<'JSONEOF'
 {
   "workbench.colorTheme": "Aether Dark",
   "workbench.iconTheme": "aether-seti-icons",
   "files.associations": { "*.ath": "aether", "*.glo": "aether" },
   "telemetry.telemetryLevel": "off",
   "update.mode": "none",
+  "extensions.autoUpdate": false,
   "window.title": "Aether Forge — ${activeEditorShort}",
   "workbench.startupEditor": "none"
 }
 JSONEOF
-cat > "${SETTINGS}/keybindings.json" <<'KEYEOF'
+cat > "${FORGE_DATA}/User/keybindings.json" <<'KEYEOF'
 [
   { "key": "f5", "command": "aether.runCurrentFile", "when": "editorLangId == 'aether'" }
 ]
@@ -82,20 +76,20 @@ green "✓ Settings"
 mkdir -p ~/.local/bin
 cat > ~/.local/bin/forge <<LAUNCHEOF
 #!/usr/bin/env bash
-exec "${CODIUM}" --user-data-dir "${DATA}/user-data" --extensions-dir "${EXT}" --new-window "\$@"
+exec codium --user-data-dir "${FORGE_DATA}" --new-window "\$@"
 LAUNCHEOF
 chmod +x ~/.local/bin/forge
 
-# ── Desktop entry + icon ──────────────────────────────────
-mkdir -p ~/.local/share/applications ~/.aether-forge/icons
-cp "${FORGE_REPO}/icons/forge-256.png" ~/.aether-forge/icons/forge.png 2>/dev/null || true
+# ── Desktop + icon ────────────────────────────────────────
+mkdir -p ~/.local/share/applications "${FORGE_DIR}/icons"
+curl -fsSL "https://raw.githubusercontent.com/StratosLabs-Aether/forge/main/icons/forge-256.png" -o "${FORGE_DIR}/icons/forge.png" 2>/dev/null || true
 
 cat > ~/.local/share/applications/aether-forge.desktop <<DESKEOF
 [Desktop Entry]
 Name=Aether Forge
 Comment=IDE for the Aether language
 Exec=${HOME}/.local/bin/forge %F
-Icon=${HOME}/.aether-forge/icons/forge.png
+Icon=${FORGE_DIR}/icons/forge.png
 Terminal=false
 Type=Application
 Categories=Development;IDE;
@@ -107,8 +101,7 @@ green "✓ Launcher + desktop"
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 green "✓ Aether Forge installed!"
-echo "  $(bold 'forge .')   — open current directory"
+echo "  $(bold 'forge .')   — open in Forge"
 echo "  $(bold 'F5')        — run .ath file"
-echo ""
-echo "  Scrible:  bash ${FORGE_REPO}/install-models.sh"
+echo "  $(bold 'system VS Code is untouched')"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
