@@ -153,6 +153,38 @@ cat > "$SETTINGS_FILE" <<'JSONEOF'
 JSONEOF
 green "✓ Settings configured"
 
+# ── Configure Run task (F5 to run .ath files) ─────────────
+TASKS_FILE="${DATA_DIR}/user-data/User/tasks.json"
+cat > "$TASKS_FILE" <<'TASKSEOF'
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Run Aether File",
+      "type": "shell",
+      "command": "aether run '${file}'",
+      "group": { "kind": "build", "isDefault": true },
+      "presentation": { "reveal": "always", "panel": "dedicated" },
+      "problemMatcher": []
+    },
+    {
+      "label": "Check Aether File",
+      "type": "shell",
+      "command": "aether check '${file}'",
+      "group": "test",
+      "presentation": { "reveal": "always", "panel": "dedicated" }
+    }
+  ]
+}
+TASKSEOF
+cat > "${DATA_DIR}/user-data/User/keybindings.json" <<'KEYEOF'
+[
+  { "key": "f5", "command": "workbench.action.tasks.build" },
+  { "key": "ctrl+f5", "command": "workbench.action.tasks.build" }
+]
+KEYEOF
+green "✓ Run configured (F5)"
+
 # ── Step 5: Create launcher + desktop entry ─────────────────
 echo "→ Creating launcher..."
 mkdir -p "$(dirname "$FORGE_BIN")"
