@@ -514,8 +514,64 @@ document.addEventListener('DOMContentLoaded',()=>{
   document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key==='s'){e.preventDefault();Forge.save();}});
   document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key==='b'){e.preventDefault();document.getElementById('sidebar-left').classList.toggle('collapsed');}});
   document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key==='j'){e.preventDefault();Forge.toggleScrible();}});
-  document.getElementById('act-settings')?.addEventListener('click',()=>alert('Aether Forge v1.0\nStratos Labs\nTauri 2.0 + Rust + Llama 3.1 8B'));
+  document.getElementById('act-settings')?.addEventListener('click',()=>alert('Aether Forge v2.1\nStratos Labs\nTauri 2.0 + Rust + Scrible AI'));
   console.log('Aether Forge ready.');
   // Ensure right sidebar visible
   document.getElementById('sidebar-right')?.classList.remove('collapsed');
+
+  // ── Integrated Terminal ──────────────────────────────────
+  Forge._terminalPolling = null;
+  Forge._terminalRunning = false;
+
+  Forge.runTerminalCommand = async function(cmd) {
+    const out = document.getElementById('terminal-output');
+    if (out) out.textContent = '';
+    this._terminalRunning = true;
+    const r = await invoke('run_shell', {command: cmd});
+    if (out && r.output) out.textContent += r.output;
+    if (r.error) logOutput('Error: '+r.error);
+    this._startPolling();
+  };
+
+  Forge._startPolling = function() {
+    if (this._terminalPolling) clearInterval(this._terminalPolling);
+    this._terminalPolling = setInterval(async () => {
+      if (!this._terminalRunning) { clearInterval(this._terminalPolling); this._terminalPolling = null; return; }
+      const r = await invoke('terminal_read', {});
+      const out = document.getElementById('terminal-output');
+      if (r.success && r.output && out) {
+        out.textContent += r.output;
+        out.scrollTop = out.scrollHeight;
+      }
+      if (r.error) { this._terminalRunning = false; logOutput('Terminal: '+r.error); }
+    }, 200);
+  };
+
+  Forge.sendTerminalInput = async function(input) {
+    if (!input) return;
+    const out = document.getElementById('terminal-output');
+    if (out) out.textContent += '$ ' + input + '\n';
+    await invoke('terminal_write', {input: input});
+    document.getElementById('terminal-input').value = '';
+  };
+
+  document.getElementById('terminal-input')?.addEventListener('keydown', async (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      const val = e.target.value.trim();
+      if (!val) return;
+      if (!Forge._terminalRunning) {
+        await Forge.runTerminalCommand(val);
+      } else {
+        await Forge.sendTerminalInput(val);
+      }
+    }
+  });
+
+  document.getElementById('act-terminal')?.addEventListener('click', () => {
+    const panel = document.getElementById('bottom-panel');
+    panel.style.display = 'flex';
+    switchPanel('terminal');
+    document.getElementById('terminal-input')?.focus();
+  });
 });

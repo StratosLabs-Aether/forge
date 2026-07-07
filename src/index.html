@@ -100,7 +100,11 @@
       <div id="output-lines"><span class="output-placeholder">Aether Forge ready. Tauri 2.0 + Rust + Scrible AI.</span></div>
     </div>
     <div id="panel-terminal" class="panel-content">
-      <div id="terminal-lines"><span class="output-placeholder">Terminal — run an Aether file to see output here.</span></div>
+      <div id="terminal-output" class="terminal-out"></div>
+      <div class="terminal-input-row">
+        <span class="terminal-prompt">$</span>
+        <input type="text" id="terminal-input" class="terminal-input" placeholder="Type a command..." autofocus>
+      </div>
     </div>
     <div id="panel-problems" class="panel-content">
       <div><span class="output-placeholder">No problems detected.</span></div>

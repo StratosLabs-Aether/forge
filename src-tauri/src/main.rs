@@ -20,18 +20,26 @@
 
 use serde::{Deserialize, Serialize};
 use std::fs;
+use std::io::{Read, Write};
 use std::path::PathBuf;
 use std::process::{Child, Command, Stdio};
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 use tauri::State;
 
 // ═══════════════════════════════════════════════════════════════════
 // State
 // ═══════════════════════════════════════════════════════════════════
 
+struct TerminalState {
+    stdin: Mutex<Option<std::process::ChildStdin>>,
+    output_buf: Arc<Mutex<String>>,
+    process: Mutex<Option<Child>>,
+}
+
 struct ForgeState {
     aether_process: Mutex<Option<Child>>,
     lsp_process: Mutex<Option<Child>>,
+    terminal: TerminalState,
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -95,6 +103,134 @@ struct ScribleChatQuery {
 struct ChatMessage {
     role: String,
     content: String,
+}
+
+// ── Integrated Terminal ─────────────────────────────────────────────
+
+#[derive(Debug, Deserialize)]
+struct ShellCommand {
+    command: String,
+}
+
+#[derive(Debug, Serialize, Clone)]
+struct TerminalResult {
+    success: bool,
+    output: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    error: Option<String>,
+}
+
+#[tauri::command]
+fn run_shell(state: State<ForgeState>, cmd: ShellCommand) -> TerminalResult {
+    // Kill any previous process
+    if let Ok(mut proc) = state.terminal.process.lock() {
+        if let Some(ref mut child) = *proc {
+            let _ = child.kill();
+            let _ = child.wait();
+        }
+        *proc = None;
+    }
+    if let Ok(mut stdin_guard) = state.terminal.stdin.lock() {
+        *stdin_guard = None;
+    }
+    // Clear output buffer
+    if let Ok(mut buf) = state.terminal.output_buf.lock() {
+        buf.clear();
+    }
+
+    // Spawn with script for PTY (so interactive programs like sudo work)
+    let escaped = cmd.command.replace('\'', "'\\''");
+    let shell_cmd = format!("script -q -c '{}' /dev/null", escaped);
+
+    let mut child = match Command::new("sh")
+        .arg("-c")
+        .arg(&shell_cmd)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+    {
+        Ok(c) => c,
+        Err(e) => return TerminalResult { success: false, output: String::new(), error: Some(format!("Failed: {}", e)) },
+    };
+
+    let stdin = child.stdin.take();
+    let stdout = child.stdout.take().unwrap();
+    let stderr = child.stderr.take().unwrap();
+
+    if let Ok(mut guard) = state.terminal.stdin.lock() {
+        *guard = stdin;
+    }
+
+    let output_buf = state.terminal.output_buf.clone();
+
+    // Background thread: read stdout+stderr into shared buffer
+    std::thread::spawn(move || {
+        let mut combined = stdout.chain(stderr);
+        let mut buf = [0u8; 1024];
+        loop {
+            match combined.read(&mut buf) {
+                Ok(0) => break,
+                Ok(n) => {
+                    if let Ok(mut ob) = output_buf.lock() {
+                        ob.push_str(&String::from_utf8_lossy(&buf[..n]));
+                    }
+                }
+                Err(_) => break,
+            }
+        }
+        let _ = child.wait();
+    });
+
+    TerminalResult {
+        success: true,
+        output: format!("$ {}\n", cmd.command),
+        error: None,
+    }
+}
+
+#[derive(Debug, Deserialize)]
+struct TerminalInput {
+    input: String,
+}
+
+#[tauri::command]
+fn terminal_write(state: State<ForgeState>, ti: TerminalInput) -> TerminalResult {
+    if let Ok(mut guard) = state.terminal.stdin.lock() {
+        if let Some(ref mut stdin) = *guard {
+            let _ = stdin.write_all(ti.input.as_bytes());
+            let _ = stdin.write_all(b"\n");
+            let _ = stdin.flush();
+            return TerminalResult { success: true, output: String::new(), error: None };
+        }
+    }
+    TerminalResult { success: false, output: String::new(), error: Some("No running process".into()) }
+}
+
+#[tauri::command]
+fn terminal_read(state: State<ForgeState>) -> TerminalResult {
+    if let Ok(mut buf) = state.terminal.output_buf.lock() {
+        let out = buf.clone();
+        buf.clear();
+        TerminalResult { success: true, output: out, error: None }
+    } else {
+        TerminalResult { success: false, output: String::new(), error: Some("Lock failed".into()) }
+    }
+}
+
+#[tauri::command]
+fn stop_terminal(state: State<ForgeState>) -> TerminalResult {
+    if let Ok(mut proc) = state.terminal.process.lock() {
+        if let Some(ref mut child) = *proc {
+            let _ = child.kill();
+            let _ = child.wait();
+        }
+        *proc = None;
+    }
+    if let Ok(mut guard) = state.terminal.stdin.lock() {
+        *guard = None;
+    }
+    TerminalResult { success: true, output: "\n── Process terminated ──\n".into(), error: None }
 }
 
 // ── File Operations ────────────────────────────────────────────────
@@ -494,6 +630,11 @@ fn main() {
         .manage(ForgeState {
             aether_process: Mutex::new(None),
             lsp_process: Mutex::new(None),
+            terminal: TerminalState {
+                stdin: Mutex::new(None),
+                output_buf: Arc::new(Mutex::new(String::new())),
+                process: Mutex::new(None),
+            },
         })
         .invoke_handler(tauri::generate_handler![
             read_file,
@@ -501,6 +642,10 @@ fn main() {
             list_dir,
             run_aether,
             stop_execution,
+            run_shell,
+            terminal_write,
+            terminal_read,
+            stop_terminal,
             scrible_complete,
             scrible_chat,
             start_lsp,
