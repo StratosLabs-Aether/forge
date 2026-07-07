@@ -67,7 +67,33 @@ Forge.runFile = async function(debug) {
     await invoke('write_file',{path:tab.path,content:tab.content});
   }
   this.renderTabs(); this._updateStatus();
-  clearOutput(); logOutput('Launched in terminal: '+tab.name+'\n');
+
+  // Show terminal panel and run inline
+  const panel = document.getElementById('bottom-panel');
+  panel.style.display = 'flex';
+  switchPanel('terminal');
+  const out = document.getElementById('terminal-output');
+  if (out) out.textContent = '';
+
+  const r = await invoke('run_aether_inline', {path: tab.path, debug: !!debug});
+  if (out && r.output) out.textContent = r.output;
+  if (r.error) logOutput('Error: '+r.error);
+  this._startPolling();
+};
+
+Forge.runFileExternal = async function(debug) {
+  let tab = this.tabs.find(t=>t.id===this.activeTabId);
+  if(!tab) return;
+  const ta=document.getElementById('editor-textarea');
+  tab.content=ta?ta.value:''; tab.isDirty=false;
+  if(!tab.path) {
+    tab.path = (this.folderPath||'/tmp') + '/' + (tab.name||'untitled.ath');
+    await invoke('write_file',{path:tab.path,content:tab.content});
+  } else {
+    await invoke('write_file',{path:tab.path,content:tab.content});
+  }
+  this.renderTabs(); this._updateStatus();
+  clearOutput(); logOutput('Launched in external terminal: '+tab.name+'\n');
   switchPanel('output');
   await invoke('run_aether',{path:tab.path,debug:!!debug});
 };
@@ -476,8 +502,9 @@ document.addEventListener('DOMContentLoaded',()=>{
   document.getElementById('btn-new-file')?.addEventListener('click',()=>Forge.newTab());
   document.getElementById('btn-save-file')?.addEventListener('click',()=>Forge.save());
   document.getElementById('btn-run')?.addEventListener('click',()=>Forge.runFile(false));
+  document.getElementById('btn-run')?.addEventListener('contextmenu',(e)=>{e.preventDefault();Forge.runFileExternal(false);});
   document.getElementById('btn-debug')?.addEventListener('click',()=>Forge.runFile(true));
-  document.getElementById('btn-stop')?.addEventListener('click',()=>{invoke('stop_execution');logOutput('Stopped.\n');});
+  document.getElementById('btn-stop')?.addEventListener('click',()=>{invoke('stop_execution');invoke('stop_terminal');logOutput('Stopped.\n');});
   document.getElementById('btn-new-tab')?.addEventListener('click',()=>Forge.newTab());
   document.getElementById('btn-clear-output')?.addEventListener('click',clearOutput);
 
@@ -527,9 +554,10 @@ document.addEventListener('DOMContentLoaded',()=>{
     const out = document.getElementById('terminal-output');
     if (out) out.textContent = '';
     this._terminalRunning = true;
+    switchPanel('terminal');
     const r = await invoke('run_shell', {command: cmd});
     if (out && r.output) out.textContent += r.output;
-    if (r.error) logOutput('Error: '+r.error);
+    if (r.error) { logOutput('Error: '+r.error+'\n'); switchPanel('output'); }
     this._startPolling();
   };
 

@@ -233,6 +233,76 @@ fn stop_terminal(state: State<ForgeState>) -> TerminalResult {
     TerminalResult { success: true, output: "\n── Process terminated ──\n".into(), error: None }
 }
 
+// ── Run aether file in integrated terminal ────────────────────────
+
+#[tauri::command]
+fn run_aether_inline(state: State<ForgeState>, path: String, debug: bool) -> TerminalResult {
+    // Kill any previous process
+    if let Ok(mut proc) = state.terminal.process.lock() {
+        if let Some(ref mut child) = *proc {
+            let _ = child.kill();
+            let _ = child.wait();
+        }
+        *proc = None;
+    }
+    if let Ok(mut stdin_guard) = state.terminal.stdin.lock() {
+        *stdin_guard = None;
+    }
+    if let Ok(mut buf) = state.terminal.output_buf.lock() {
+        buf.clear();
+    }
+
+    let debug_flag = if debug { " --debug" } else { "" };
+    let cmd_str = format!("aether run{} '{}'", debug_flag, path.replace('\'', "'\\''"));
+    let escaped = format!("script -q -c '{}' /dev/null", cmd_str.replace('\'', "'\\''"));
+
+    let mut child = match Command::new("sh")
+        .arg("-c")
+        .arg(&escaped)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+    {
+        Ok(c) => c,
+        Err(e) => return TerminalResult { success: false, output: String::new(), error: Some(format!("Failed: {}", e)) },
+    };
+
+    let stdin = child.stdin.take();
+    let stdout = child.stdout.take().unwrap();
+    let stderr = child.stderr.take().unwrap();
+
+    if let Ok(mut guard) = state.terminal.stdin.lock() {
+        *guard = stdin;
+    }
+    if let Ok(mut proc) = state.terminal.process.lock() {
+        *proc = Some(child);
+    }
+
+    let output_buf = state.terminal.output_buf.clone();
+    std::thread::spawn(move || {
+        let mut combined = stdout.chain(stderr);
+        let mut buf = [0u8; 1024];
+        loop {
+            match combined.read(&mut buf) {
+                Ok(0) => break,
+                Ok(n) => {
+                    if let Ok(mut ob) = output_buf.lock() {
+                        ob.push_str(&String::from_utf8_lossy(&buf[..n]));
+                    }
+                }
+                Err(_) => break,
+            }
+        }
+    });
+
+    TerminalResult {
+        success: true,
+        output: format!("> aether run '{}'\n", path),
+        error: None,
+    }
+}
+
 // ── File Operations ────────────────────────────────────────────────
 
 #[tauri::command]
@@ -641,6 +711,7 @@ fn main() {
             write_file,
             list_dir,
             run_aether,
+            run_aether_inline,
             stop_execution,
             run_shell,
             terminal_write,
