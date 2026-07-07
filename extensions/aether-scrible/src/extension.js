@@ -125,9 +125,12 @@ function activate(context) {
     context.subscriptions.push(
         vscode.commands.registerCommand('aether-scrible.switchModel', async () => {
             const config = vscode.workspace.getConfiguration('aether-scrible');
-            const current = config.get('model', 'aether-scrible:3b-q4');
+            const current = config.get('chatModel', 'scrible-chat');
 
             const models = [
+                { label: '$(hubot) Scrible Chat (Phi-3 v3 · HF)', model: 'scrible-chat', description: 'Primary chat model from HuggingFace' },
+                { label: '$(zap) Scrible Inline (FIM · HF)', model: 'scrible-inline', description: 'Fill-in-the-middle completions' },
+            ];
                 { label: '$(robot) Aether Scrible 3B (pretrained)', value: 'aether-scrible:3b-q4', description: 'StarCoder2-3B fine-tuned on Aether code' },
                 { label: '$(hubot) StarCoder2 3B (base)', value: 'starcoder2:3b', description: 'Base StarCoder2-3B model via Ollama' },
                 { label: '$(beaker) DeepSeek Coder 1.3B', value: 'deepseek-coder:1.3b', description: 'Lightweight alternative via Ollama' },

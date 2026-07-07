@@ -109,11 +109,7 @@ class ScribleCompletionProvider {
      * Resolve the model name from config.
      */
     _getModelName(config) {
-        const model = config.get('model', 'aether-scrible:3b-q4');
-        if (model === 'custom') {
-            return config.get('customModel', 'aether-scrible:3b-q4');
-        }
-        return model;
+        return config.get('inlineModel', 'scrible-inline');
     }
 
     /**

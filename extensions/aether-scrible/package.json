@@ -1,8 +1,8 @@
 {
   "name": "aether-scrible",
-  "displayName": "Scrible — AI Coding Agent for Aether by Stratos Labs",
-  "description": "AI-powered code completion and chat assistant for the Aether programming language. Powered by StarCoder2-3B. Supports preinstalled pretrained models and Ollama models.",
-  "version": "1.1.0",
+  "displayName": "Scrible — AI Copilot for Aether",
+  "description": "Copilot-like AI code completion and chat for Aether. Powered by Phi-3 v3 via HuggingFace + Ollama.",
+  "version": "2.0.0",
   "publisher": "stratos-labs",
   "main": "./src/extension.js",
   "activationEvents": [
@@ -19,19 +19,64 @@
   ],
   "icon": "icon.png",
   "contributes": {
+    "keybindings": [
+      {
+        "command": "aether-scrible.acceptCompletion",
+        "key": "tab",
+        "when": "inlineCompletionHasIndentationLessThanTabSize && inlineSuggestionHasIndentationLessThanTabSize && inlineSuggestionVisible && !editorTabMovesFocus"
+      },
+      {
+        "command": "editor.action.inlineSuggest.trigger",
+        "key": "alt+\\",
+        "when": "editorTextFocus && !editorHasSelection"
+      },
+      {
+        "command": "aether-scrible.startChat",
+        "key": "ctrl+alt+i",
+        "mac": "cmd+alt+i"
+      }
+    ],
+    "configuration": {
+      "title": "Scrible",
+      "properties": {
+        "aether-scrible.inlineModel": {
+          "type": "string",
+          "default": "scrible-inline",
+          "description": "Ollama model for inline completions (HF: stratoslabs/scrible-inline)"
+        },
+        "aether-scrible.chatModel": {
+          "type": "string",
+          "default": "scrible-chat",
+          "description": "Ollama model for chat (HF: stratoslabs/scrible-chat)"
+        },
+        "aether-scrible.ollamaEndpoint": {
+          "type": "string",
+          "default": "http://localhost:11434",
+          "description": "Ollama API endpoint"
+        },
+        "aether-scrible.autocompleteEnabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable inline ghost-text completions (like Copilot)"
+        },
+        "aether-scrible.temperature": {
+          "type": "number",
+          "default": 0.2,
+          "description": "Model temperature (0-1)"
+        },
+        "aether-scrible.maxTokens": {
+          "type": "number",
+          "default": 128,
+          "description": "Maximum tokens for inline completions"
+        }
+      }
+    },
     "viewsContainers": {
       "activitybar": [
         {
           "id": "aether-scrible-sidebar",
-          "title": "Scrible AI Agent",
-          "icon": "$(robot)"
-        }
-      ],
-      "panel": [
-        {
-          "id": "aether-scrible-status",
-          "title": "Scrible Status Center",
-          "icon": "$(pulse)"
+          "title": "Scrible AI",
+          "icon": "$(hubot)"
         }
       ]
     },

@@ -104,11 +104,7 @@ class ScribleChatPanel {
     }
 
     _getModelName(config) {
-        const model = config.get('model', 'aether-scrible:3b-q4');
-        if (model === 'custom') {
-            return config.get('customModel', 'aether-scrible:3b-q4');
-        }
-        return model;
+        return config.get('chatModel', 'scrible-chat');
     }
 
     /**
@@ -297,7 +293,7 @@ Respond concisely with correct Aether code. Always use parenthesized syntax for 
                 <span class="scrible-icon">$(robot)</span>
                 <span class="scrible-title">Scrible</span>
             </div>
-            <div class="scrible-model-badge" id="modelBadge">aether-scrible:3b-q4</div>
+            <div class="scrible-model-badge" id="modelBadge">scrible-chat (Phi-3 v3 · HF)</div>
         </div>
 
         <!-- Messages area -->
