@@ -19,6 +19,17 @@ echo ""
 bold "⚒  Aether Forge Installer"
 echo ""
 
+# ── Step 0: Get Forge files ───────────────────────────────
+if [[ ! -d "${FORGE_DIR}/extensions" ]]; then
+  echo "→ Fetching Aether Forge files..."
+  rm -rf "${FORGE_DIR}" 2>/dev/null || true
+  git clone --depth 1 https://github.com/StratosLabs-Aether/forge.git "${FORGE_DIR}" 2>/dev/null || {
+    red "Failed to download Forge. Check your internet connection."
+    exit 1
+  }
+  green "✓ Forge files downloaded"
+fi
+
 # ── Step 1: Install VS Codium ──────────────────────────────
 echo "→ Checking code editor..."
 if command -v codium &>/dev/null; then
