@@ -8,81 +8,63 @@ red()   { printf '\033[31m%s\033[0m' "$1"; }
 
 FORGE_DIR="${HOME}/.aether-forge"
 FORGE_BIN="${HOME}/.local/bin/forge"
+DATA="${FORGE_DIR}/data"
+EXT="${DATA}/extensions"
+SETTINGS="${DATA}/user-data/User/settings.json"
 
 echo ""
 bold "⚒  Aether Forge Installer"
-echo "  Install: ${FORGE_DIR}"
-echo ""
 
-# ── Step 0: Clone forge repo ──────────────────────────────
+# ── Clone forge ───────────────────────────────────────────
 FORGE_REPO="${FORGE_DIR}/forge-repo"
-if [[ ! -d "${FORGE_REPO}" ]]; then
-  echo "→ Fetching Aether Forge..."
-  rm -rf "$FORGE_REPO" 2>/dev/null || true
-  git clone --depth 1 https://github.com/StratosLabs-Aether/forge.git "$FORGE_REPO" 2>/dev/null || { red "Failed to fetch Forge"; exit 1; }
-  green "✓ Forge downloaded"
-fi
+rm -rf "$FORGE_REPO" 2>/dev/null || true
+echo "→ Fetching..."
+git clone --depth 1 https://github.com/StratosLabs-Aether/forge.git "$FORGE_REPO" 2>/dev/null || { red "Clone failed"; exit 1; }
 
-# ── Step 1: Download VS Codium ────────────────────────────
+# ── Download VS Codium ────────────────────────────────────
 if [[ ! -f "${FORGE_DIR}/bin/codium" && ! -f "${FORGE_DIR}/codium" ]]; then
   echo "→ Downloading VS Codium..."
-  ARCH="$(uname -m)"
-  case "$(uname -s)" in
-    Linux)
-      case "$ARCH" in
-        x86_64) URL="https://github.com/VSCodium/vscodium/releases/download/1.96.0.24347/VSCodium-linux-x64-1.96.0.24347.tar.gz" ;;
-        aarch64) URL="https://github.com/VSCodium/vscodium/releases/download/1.96.0.24347/VSCodium-linux-arm64-1.96.0.24347.tar.gz" ;;
-        *) red "Unsupported architecture"; exit 1 ;;
-      esac ;;
-    Darwin)
-      case "$ARCH" in
-        x86_64) URL="https://github.com/VSCodium/vscodium/releases/download/1.96.0.24347/VSCodium-darwin-x64-1.96.0.24347.zip" ;;
-        arm64) URL="https://github.com/VSCodium/vscodium/releases/download/1.96.0.24347/VSCodium-darwin-arm64-1.96.0.24347.zip" ;;
-        *) red "Unsupported architecture"; exit 1 ;;
-      esac ;;
-    *) red "Unsupported OS"; exit 1 ;;
+  case "$(uname -m)" in
+    x86_64) URL="https://github.com/VSCodium/vscodium/releases/download/1.96.0.24347/VSCodium-linux-x64-1.96.0.24347.tar.gz" ;;
+    aarch64) URL="https://github.com/VSCodium/vscodium/releases/download/1.96.0.24347/VSCodium-linux-arm64-1.96.0.24347.tar.gz" ;;
+    *) red "Unsupported arch"; exit 1 ;;
   esac
   mkdir -p "$FORGE_DIR"
   TMP="/tmp/forge-vscodium.tar.gz"
-  curl -fsSL --location --connect-timeout 10 --max-time 300 -o "$TMP" "$URL" || { red "Download failed"; exit 1; }
-  tar -xzf "$TMP" -C "$FORGE_DIR" 2>/dev/null || unzip -qo "$TMP" -d "$FORGE_DIR" 2>/dev/null || { red "Extract failed"; exit 1; }
+  curl -fsSL -o "$TMP" "$URL" || { red "Download failed"; exit 1; }
+  tar -xzf "$TMP" -C "$FORGE_DIR"
   rm -f "$TMP"
-  green "✓ VS Codium installed"
 fi
 
-# ── Find codium binary ────────────────────────────────────
 CODIUM=""
 for c in "${FORGE_DIR}/bin/codium" "${FORGE_DIR}/codium"; do
   [[ -f "$c" ]] && { CODIUM="$c"; break; }
 done
 CODIUM="${CODIUM:-$(find "${FORGE_DIR}" -name codium -type f -not -path '*/resources/*' 2>/dev/null | head -1)}"
-[[ -z "$CODIUM" ]] && { red "codium binary not found"; exit 1; }
+[[ -z "$CODIUM" ]] && { red "codium not found"; exit 1; }
 
-# ── Setup data dir ────────────────────────────────────────
-DATA="${FORGE_DIR}/data"
-EXT="${DATA}/extensions"
+# ── Install extensions ────────────────────────────────────
+echo "→ Installing extensions..."
+rm -rf "${EXT}" 2>/dev/null || true
 mkdir -p "${EXT}" "${DATA}/user-data/User"
 
-# ── Install extensions via VSIX ───────────────────────────
-echo "→ Installing Aether Forge extensions..."
-
-install_vsix() {
-  local vsix="$1" name="$2"
-  if [[ -f "${FORGE_REPO}/${vsix}" ]]; then
-    "$CODIUM" --user-data-dir "${DATA}/user-data" --extensions-dir "${EXT}" --install-extension "${FORGE_REPO}/${vsix}" --force 2>&1 | tail -1
-    green "  ✓ ${name}"
-  else
-    warn "  ⚠ ${name} VSIX not found"
-  fi
+cp_ext() {
+  local src="$1" name="$2"
+  local dst="${EXT}/${name}"
+  mkdir -p "$dst"
+  cp -r "${FORGE_REPO}/extensions/${src}/"* "$dst/"
+  green "  ✓ ${name}"
 }
 
-install_vsix "extensions/aether-language.vsix" "Aether Language"
-install_vsix "extensions/aether-file-icons.vsix" "Aether File Icons"
-install_vsix "extensions/aether-scrible.vsix" "Scrible AI"
+cp_ext "aether-language"   "stratos-labs.aether-support"
+cp_ext "aether-file-icons" "stratos-labs.aether-file-icons"
+cp_ext "aether-scrible"    "stratos-labs.aether-scrible"
 
-# ── Configure settings ────────────────────────────────────
-echo "→ Configuring..."
-SETTINGS="${DATA}/user-data/User/settings.json"
+# Use folder names that match extension ID (publisher.name)
+# The aether-language folder has name "aether-support" in package.json
+# VS Codium uses the folder name as fallback ID
+
+# ── Settings ──────────────────────────────────────────────
 cat > "$SETTINGS" <<'JSONEOF'
 {
   "workbench.colorTheme": "Aether Dark",
@@ -102,20 +84,19 @@ cat > "${DATA}/user-data/User/keybindings.json" <<'KEYEOF'
   { "key": "ctrl+f5", "command": "aether.debugCurrentFile", "when": "editorLangId == 'aether'" }
 ]
 KEYEOF
-green "✓ Settings configured"
 
-# ── Icons + Desktop ───────────────────────────────────────
-if [[ -d "${FORGE_REPO}/icons" ]]; then
-  mkdir -p "${FORGE_DIR}/share/icons"
-  cp "${FORGE_REPO}/icons/forge-256.png" "${FORGE_DIR}/share/icons/forge.png"
-fi
-
-mkdir -p ~/.local/share/applications ~/.local/bin
+# ── Launcher + Desktop ────────────────────────────────────
+mkdir -p ~/.local/bin ~/.local/share/applications
 cat > "$FORGE_BIN" <<LAUNCHEOF
 #!/usr/bin/env bash
 exec "${CODIUM}" --user-data-dir "${DATA}/user-data" --extensions-dir "${EXT}" "\$@"
 LAUNCHEOF
 chmod +x "$FORGE_BIN"
+
+if [[ -d "${FORGE_REPO}/icons" ]]; then
+  mkdir -p "${FORGE_DIR}/share/icons"
+  cp "${FORGE_REPO}/icons/forge-256.png" "${FORGE_DIR}/share/icons/forge.png"
+fi
 
 cat > ~/.local/share/applications/aether-forge.desktop <<DESKEOF
 [Desktop Entry]
@@ -129,13 +110,12 @@ Categories=Development;IDE;
 StartupWMClass=codium
 DESKEOF
 command -v update-desktop-database &>/dev/null && update-desktop-database ~/.local/share/applications/ 2>/dev/null || true
-green "✓ Launcher + desktop entry"
 
-echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-bold "✓ Aether Forge installed!"
-echo "  $(bold 'forge')        — launch"
-echo "  $(bold 'forge .')      — open current dir"
+green "✓ Aether Forge installed!"
+echo "  $(bold 'forge')    — launch IDE"
+echo "  $(bold 'forge .')  — open current directory"
+echo "  F5        — run .ath file"
 echo ""
 echo "  Scrible AI:  bash ${FORGE_REPO}/install-models.sh"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
