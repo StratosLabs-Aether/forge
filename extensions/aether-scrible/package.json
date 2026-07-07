@@ -1,0 +1,175 @@
+{
+  "name": "aether-scrible",
+  "displayName": "Scrible — AI Coding Agent for Aether by Stratos Labs",
+  "description": "AI-powered code completion and chat assistant for the Aether programming language. Powered by StarCoder2-3B. Supports preinstalled pretrained models and Ollama models.",
+  "version": "1.1.0",
+  "publisher": "stratos-labs",
+  "main": "./src/extension.js",
+  "activationEvents": [
+    "onLanguage:aether",
+    "onView:aether-scrible.chatPanel"
+  ],
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Machine Learning",
+    "Programming Languages",
+    "Chat"
+  ],
+  "icon": "icon.png",
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "aether-scrible-sidebar",
+          "title": "Scrible AI Agent",
+          "icon": "$(robot)"
+        }
+      ],
+      "panel": [
+        {
+          "id": "aether-scrible-status",
+          "title": "Scrible Status Center",
+          "icon": "$(pulse)"
+        }
+      ]
+    },
+    "views": {
+      "aether-scrible-sidebar": [
+        {
+          "type": "webview",
+          "id": "aether-scrible.chatPanel",
+          "name": "AI Coding Agent (Scrible)",
+          "contextualTitle": "Scrible"
+        }
+      ],
+      "aether-scrible-status": [
+        {
+          "type": "webview",
+          "id": "aether-scrible.statusCenter",
+          "name": "Status Center"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "aether-scrible.startChat",
+        "title": "Scrible: Start Chat",
+        "category": "Aether",
+        "icon": "$(comment-discussion)"
+      },
+      {
+        "command": "aether-scrible.explainCode",
+        "title": "Scrible: Explain This Code",
+        "category": "Aether"
+      },
+      {
+        "command": "aether-scrible.fixCode",
+        "title": "Scrible: Fix This Code",
+        "category": "Aether"
+      },
+      {
+        "command": "aether-scrible.generateDocstring",
+        "title": "Scrible: Generate Docstring",
+        "category": "Aether"
+      },
+      {
+        "command": "aether-scrible.switchModel",
+        "title": "Scrible: Switch Model",
+        "category": "Aether"
+      },
+      {
+        "command": "aether-scrible.toggleAutocomplete",
+        "title": "Scrible: Toggle Autocomplete",
+        "category": "Aether"
+      },
+      {
+        "command": "aether-scrible.openStatusCenter",
+        "title": "Scrible: Open Status Center",
+        "category": "Aether",
+        "icon": "$(pulse)"
+      }
+    ],
+    "menus": {
+      "editor/context": [
+        {
+          "command": "aether-scrible.explainCode",
+          "when": "editorLangId == aether",
+          "group": "aether-scrible@1"
+        },
+        {
+          "command": "aether-scrible.fixCode",
+          "when": "editorLangId == aether",
+          "group": "aether-scrible@2"
+        },
+        {
+          "command": "aether-scrible.generateDocstring",
+          "when": "editorLangId == aether",
+          "group": "aether-scrible@3"
+        }
+      ],
+      "editor/title": [
+        {
+          "command": "aether-scrible.startChat",
+          "when": "editorLangId == aether",
+          "group": "navigation"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Scrible — Aether AI Agent",
+      "properties": {
+        "aether-scrible.model": {
+          "type": "string",
+          "default": "aether-scrible:3b-q4",
+          "enum": [
+            "aether-scrible:3b-q4",
+            "starcoder2:3b",
+            "deepseek-coder:1.3b",
+            "codellama:7b",
+            "custom"
+          ],
+          "description": "Model to use for completions and chat. 'aether-scrible:3b-q4' is the preinstalled pretrained model. You can also use any Ollama model."
+        },
+        "aether-scrible.customModel": {
+          "type": "string",
+          "default": "",
+          "description": "Custom Ollama model name (used when model is set to 'custom')"
+        },
+        "aether-scrible.ollamaEndpoint": {
+          "type": "string",
+          "default": "http://localhost:11434",
+          "description": "Ollama API endpoint"
+        },
+        "aether-scrible.autocompleteEnabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable inline code completions"
+        },
+        "aether-scrible.autocompleteDelay": {
+          "type": "number",
+          "default": 300,
+          "description": "Delay in ms before requesting autocomplete after typing stops"
+        },
+        "aether-scrible.maxTokens": {
+          "type": "number",
+          "default": 256,
+          "description": "Maximum tokens to generate per completion"
+        },
+        "aether-scrible.temperature": {
+          "type": "number",
+          "default": 0.2,
+          "description": "Model temperature (0-1). Lower = more deterministic"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "echo Ready",
+    "package": "vsce package"
+  },
+  "devDependencies": {
+    "@vscode/vsce": "^2.22.0"
+  }
+}

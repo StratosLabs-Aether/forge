@@ -1,137 +1,29 @@
-# ⚒ Aether Forge IDE
+# ⚒ Aether Forge
 
-**Aether Forge** is the official native desktop IDE for the [Aether](https://github.com/StratosLabs-Aether/source) programming language. Built with **Tauri 2.0 + Rust** for maximum performance, featuring a custom dark theme and the **Scrible AI agent** preinstalled — powered by **StarCoder2-3B**, heavily modified and trained for coding in Aether.
+The official IDE for the [Aether](https://github.com/StratosLabs-Aether/source) programming language — powered by VS Codium.
 
-> **Architecture**: Tauri 2.0 (Rust backend) + CodeMirror 6 (editor) + Tree-sitter (syntax) + Tower-LSP (intelligence)
-
-```
-┌──────────────────────────────────────────────────────────────┐
-│  ⚒ Aether Forge                              🤖 Scrible  ●  │  ← TOOLBAR
-├──────────────────────────────────────────────────────────────┤
-│  📄 Untitled.ath  │  🧪 main.ath  │  +                       │  ← TABS
-├──────────┬────────────────────────┬──────────────────────────┤
-│  📁 FILES│                        │  🤖 AI Coding Agent      │
-│          │                        │     (Scrible)            │
-│  📁 src/ │   Active File          │                          │
-│  🧪 main │   (Text Editor)        │  ┌────────────────────┐  │
-│  📄 READ │                        │  │ scrible-chat      │  │
-│  📁 tests│   Monaco Editor        │  │ User can use our   │  │
-│  🧪 smoke│   with Aether syntax   │  │ preinstalled model │  │
-│          │   highlighting         │  │ or Ollama model    │  │
-│          │                        │  └────────────────────┘  │
-│          │                        │  [Chat messages here]    │
-│          │                        │  [Ask Scrible...]  [➤]  │
-├──────────┴────────────────────────┴──────────────────────────┤
-│  📟 Output — Aether Forge ready.          ⚡ StarCoder2-3B Q4 │  ← STATUS CENTER
-└──────────────────────────────────────────────────────────────┘
-```
-
-## Features
-
-- **Beautiful Dark Theme** — Custom Catppuccin-inspired palette, sleek and modern
-- **Monaco Editor** — Same editor that powers VS Code, with full Aether syntax highlighting
-- **Scrible AI Agent** — StarCoder2-3B fine-tuned for Aether, with:
-  - **Inline code completions** (Fill-In-the-Middle)
-  - **Chat interface** for code generation, explanation, and fixes
-  - **Preinstalled pretrained model** + any Ollama model support
-- **File Explorer** — Tree view with directory expansion
-- **Tab System** — Multi-file editing with dirty-state indicators
-- **Integrated Terminal** — Run, debug, and test Aether code directly
-- **Status Center** — Real-time output, model status, and cursor position
-
-## Quick Start
-
-### Prerequisites
-
-- **Node.js** >= 18
-- **npm** >= 9
-- **Rust** >= 1.75 (for the Tauri backend)
-- **Node.js** >= 18 (for Tree-sitter CLI only)
-- **Aether CLI** installed and in PATH
-- **Ollama** (for Scrible AI — optional but recommended)
-
-### Install & Run
+## Install
 
 ```bash
-cd Aether-Forge-IDE
-
-# Install Tauri CLI
-cargo install tauri-cli --version "^2"
-
-# Run in development mode
-cargo tauri dev
+curl -fsSL https://raw.githubusercontent.com/StratosLabs-Aether/forge/main/install.sh | bash
 ```
 
-### Build Standalone Packages
+## What's included
+
+- **Aether Language Support** — syntax highlighting, snippets, Aether Dark theme
+- **Scrible AI** — Ollama-powered chat and code completions (Phi-3 v3)
+- **Terminal** — xterm.js with full PTY support (ask(), sudo, SSH all work)
+- **No telemetry** — built on VS Codium, all tracking removed
+
+## Launch
 
 ```bash
-cargo tauri build           # Native binary for current OS
-cargo tauri build --target x86_64-unknown-linux-gnu
+forge          # launcher command
+codium .       # open current directory
 ```
 
-## Architecture
+## Requirements
 
-```
-Aether-Forge-IDE/
-├── src-tauri/
-│   ├── Cargo.toml              # Tauri 2.0 + Rust dependencies
-│   ├── tauri.conf.json         # Window config, CSP, bundling
-│   └── src/main.rs             # Rust backend (files, LSP, Scrible AI)
-│   ├── preload.js            # Secure context bridge
-│   ├── aether-runtime/       # Bundled Aether interpreter (Python)
-│   └── renderer/
-│       ├── index.html        # IDE shell layout
-│       ├── css/
-│       │   └── forge-dark.css    # Complete dark theme
-│       ├── js/
-│       │   ├── forge-core.js     # State management, tabs, IPC
-│       │   ├── forge-editor.js   # Monaco editor + Aether language support
-│       │   ├── forge-files.js    # File explorer panel
-│       │   ├── forge-scrible.js  # Scrible AI chat panel
-│       │   ├── forge-status.js   # Status center + terminal output
-│       │   └── forge-app.js      # Bootstrap
-│       └── icons/
-│           └── forge.png
-```
-
-## Scrible AI Agent
-
-Scrible is powered by **StarCoder2-3B**, heavily modified and trained for coding in Aether:
-
-| Model | Size | Description |
-|---|---|---|
-| `aether-scrible:3b-q4` | ~2 GB | **Recommended** — Trained on Aether code (preinstalled) |
-| `starcoder2:3b` | ~2 GB | Base StarCoder2 model |
-| Any Ollama model | varies | Custom model support |
-
-### Training Scrible
-
-The Scrible agent is trained using the pipeline in `../scripts/train-starcoder/`:
-
-```bash
-cd ../scripts/train-starcoder
-python prepare_data.py    # Collects all .ath files
-python finetune.py        # Fine-tunes StarCoder2-3B with QLoRA
-python convert_to_ollama.py  # Converts to Ollama format
-ollama pull aether-scrible:3b-q4
-```
-
-## Keyboard Shortcuts
-
-| Shortcut | Action |
-|---|---|
-| `Ctrl+N` | New file |
-| `Ctrl+O` | Open file |
-| `Ctrl+S` | Save |
-| `Ctrl+K` | Open folder |
-| `F5` | Run current file |
-| `Ctrl+F5` | Debug current file |
-| `Shift+F5` | Stop execution |
-| `Ctrl+T` | Run tests |
-| `Ctrl+B` | Toggle Files panel |
-| `Ctrl+J` | Toggle Scrible panel |
-| `Ctrl+`` | Toggle Status Center |
-
-## License
-
-MIT — Stratos Labs © 2026
+- Linux, macOS, or Windows
+- [Aether](https://github.com/StratosLabs-Aether/source) (`curl -fsSL https://raw.githubusercontent.com/StratosLabs-Aether/source/main/scripts/install.sh | bash`)
+- [Ollama](https://ollama.com) (for Scrible AI)

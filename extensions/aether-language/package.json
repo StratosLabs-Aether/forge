@@ -1,0 +1,132 @@
+{
+  "name": "aether-support",
+  "displayName": "Aether Language Support by Stratos Labs",
+  "description": "Language support for Aether (.ath, .glo) — syntax highlighting, snippets, debugging, dark theme",
+  "version": "2.3.0",
+  "publisher": "stratos-labs",
+  "main": "./extension.js",
+  "activationEvents": [
+    "onLanguage:aether",
+    "onCommand:aether.newProject",
+    "onCommand:aether.configureWorkspace",
+    "onCommand:aether.runCurrentFile",
+    "onCommand:aether.debugCurrentFile",
+    "onDebugInitialConfigurations",
+    "onDebugResolve:aether"
+  ],
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Programming Languages",
+    "Snippets"
+  ],
+  "contributes": {
+    "languages": [
+      {
+        "id": "aether",
+        "aliases": [
+          "Aether",
+          "aether"
+        ],
+        "extensions": [
+          ".ath",
+          ".glo"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "aether",
+        "scopeName": "source.aether",
+        "path": "./syntaxes/aether.tmLanguage.json"
+      }
+    ],
+    "themes": [
+      {
+        "label": "Aether Dark",
+        "uiTheme": "vs-dark",
+        "path": "./themes/aether-dark.json"
+      }
+    ],
+    "snippets": [
+      {
+        "language": "aether",
+        "path": "./snippets/aether.json"
+      }
+    ],
+    "commands": [
+      {
+        "command": "aether.newProject",
+        "title": "Aether: New Project",
+        "category": "Aether"
+      },
+      {
+        "command": "aether.configureWorkspace",
+        "title": "Aether: Configure Run/Debug For Workspace",
+        "category": "Aether"
+      },
+      {
+        "command": "aether.runCurrentFile",
+        "title": "Aether: Run Current File",
+        "category": "Aether"
+      },
+      {
+        "command": "aether.debugCurrentFile",
+        "title": "Aether: Debug Current File",
+        "category": "Aether"
+      }
+    ],
+    "debuggers": [
+      {
+        "type": "aether",
+        "label": "Aether",
+        "languages": [
+          "aether"
+        ],
+        "configurationAttributes": {
+          "launch": {
+            "required": [
+              "request",
+              "type"
+            ],
+            "properties": {
+              "program": {
+                "type": "string",
+                "description": "Path to the .ath file to run"
+              },
+              "cwd": {
+                "type": "string",
+                "description": "Working directory for the debug run"
+              },
+              "debug": {
+                "type": "boolean",
+                "default": true,
+                "description": "Whether to run with --debug"
+              }
+            }
+          }
+        },
+        "initialConfigurations": [
+          {
+            "name": "Debug Current Aether File",
+            "type": "aether",
+            "request": "launch",
+            "program": "${file}",
+            "cwd": "${fileDirname}",
+            "debug": true
+          },
+          {
+            "name": "Run Current Aether File",
+            "type": "aether",
+            "request": "launch",
+            "program": "${file}",
+            "cwd": "${fileDirname}",
+            "debug": false
+          }
+        ]
+      }
+    ]
+  }
+}
