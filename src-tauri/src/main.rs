@@ -407,8 +407,10 @@ fn stop_lsp(state: State<ForgeState>) -> FileResult {
 // ═══════════════════════════════════════════════════════════════════
 
 fn main() {
-    // Fix blank window on Wayland: force X11 backend
+    // Fix blank/grey screen on Wayland + webkit2gtk GPU rendering
     std::env::set_var("GDK_BACKEND", "x11");
+    std::env::set_var("WEBKIT_DISABLE_COMPOSITING_MODE", "1");
+    std::env::set_var("WEBKIT_DISABLE_DMABUF_RENDERER", "1");
 
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
