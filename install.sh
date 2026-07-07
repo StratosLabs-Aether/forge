@@ -159,11 +159,16 @@ green "✓ Settings configured"
 # ── Keybinding for Run (triggers extension command) ────────
 cat > "${DATA_DIR}/user-data/User/keybindings.json" <<'KEYEOF'
 [
-  { "key": "f5", "command": "aether.runCurrentFile" },
-  { "key": "ctrl+f5", "command": "aether.debugCurrentFile" }
+  { "key": "f5", "command": "aether.runCurrentFile", "when": "editorLangId == 'aether'" },
+  { "key": "ctrl+f5", "command": "aether.debugCurrentFile", "when": "editorLangId == 'aether'" }
 ]
 KEYEOF
 green "✓ Run configured (F5)"
+
+# Update desktop database for dock icon
+if command -v update-desktop-database &>/dev/null; then
+  update-desktop-database "${HOME}/.local/share/applications/" 2>/dev/null || true
+fi
 
 # ── Step 5: Create launcher + desktop entry ─────────────────
 echo "→ Creating launcher..."
