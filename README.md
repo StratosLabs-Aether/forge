@@ -4,37 +4,46 @@ The official IDE for the [Aether](https://github.com/StratosLabs-Aether/aether) 
 
 Built on [Eclipse Theia](https://theia-ide.org/).
 
-## Download
-
-Download the latest AppImage from [Releases](https://github.com/StratosLabs-Aether/forge/releases).
-
-## Run
+## Quick Start
 
 ```bash
-chmod +x Aether-Forge-x86_64.AppImage
-./Aether-Forge-x86_64.AppImage
+# Ubuntu/Debian: install FUSE first
+sudo apt install libfuse2
+
+# Arch: FUSE is pre-installed
+
+# Download and run
+chmod +x aether-forge.sh Aether-Forge-x86_64.AppImage
+./aether-forge.sh
+```
+
+Or run directly:
+```bash
+./Aether-Forge-x86_64.AppImage --no-sandbox
 ```
 
 ## Features
 
 - Syntax highlighting for `.ath` and `.glo` files
-- Run and debug Aether files directly from the IDE
+- Run and debug Aether files directly from the IDE (Ctrl+Shift+P → "Aether: Run Current File")
 - Built-in terminal with `aether` CLI
-- Material Icon Theme with 1,200+ file icons
+- 1,250+ Material Design file icons (SVG, no font dependency)
 - Dark purple theme
 
 ## Requirements
 
 - Linux x86_64
-- `aether` CLI installed ([install guide](https://github.com/StratosLabs-Aether/aether))
+- `libfuse2` (Ubuntu/Debian: `sudo apt install libfuse2`)
+- `aether` CLI ([install guide](https://github.com/StratosLabs-Aether/aether))
 
-## Development
+## Troubleshooting
 
-Aether Forge is forked from [Eclipse Theia Blueprint](https://github.com/eclipse-theia/theia-blueprint).
+**Blank window or crash:** Run with `--no-sandbox --disable-gpu-sandbox` flags.
 
+**"AppImage not found" or mount error:** Install `libfuse2`:
 ```bash
-# Build from source
-git clone https://github.com/StratosLabs-Aether/forge
-cd forge
-# See build instructions in the source repository
+sudo apt install libfuse2   # Ubuntu/Debian
+sudo pacman -S fuse2         # Arch
 ```
+
+**Wayland issues:** The launch script auto-detects Wayland and uses X11 fallback.
